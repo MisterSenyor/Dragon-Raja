@@ -1,4 +1,5 @@
 import pygame as pg
+from animated_sprite import AnimatedSprite
 
 from settings import *
 
@@ -14,26 +15,43 @@ class Player(pg.sprite.Sprite):
         self.pos = x, y
         self._i = 0
         self._t = 1
+        self.status = 'idle'
+        self.animations = {
+            'idle': AnimatedSprite('Knight/KnightIdle_strip.png', 15),
+            'run': AnimatedSprite('Knight/KnightRun_strip.png', 8),
+            'death': AnimatedSprite('Knight/KnightDeath_strip.png', 15)
+        }
+        self.animation = self.animations[self.status]
 
         self.image = pg.Surface((TILESIZE, TILESIZE))
         self.image.fill((255, 0, 0))
 
     def move(self, x, y):
+        self.change_status('run')
         self._start = self.pos
         self._end = x, y
         dist = ((self._end[0] - self._start[0]) ** 2 + (self._end[1] - self._start[1]) ** 2) ** 0.5
         self._t = dist / self.walk_speed
         self._i = 0
 
+    def change_status(self, status):
+        self.status = status
+        self.animation = self.animations[self.status]
+
     def update(self):
         """" UPDATES PLAYER LOCATION:
         for each iteration update pos by averaging the 'start' and 'end' for each axis
         """
         # TODO: check dt
-        if self._i < self._t:
-            self.pos = (round(self._start[0] + (self._end[0] - self._start[0]) * self._i / self._t),
-                        round(self._start[1] + (self._end[1] - self._start[1]) * self._i / self._t))
-            self._i += 1
+        if self.status == 'run':
+            if self._i < self._t:
+                self.pos = (round(self._start[0] + (self._end[0] - self._start[0]) * self._i / self._t),
+                            round(self._start[1] + (self._end[1] - self._start[1]) * self._i / self._t))
+                self._i += 1
+            else:
+                self.change_status('idle')
+        self.animation.update()
+        self.image = self.animation.image
 
 
 def update(player):
