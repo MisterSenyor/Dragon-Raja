@@ -4,7 +4,8 @@ import pygame
 class AnimatedSprite(pygame.sprite.Sprite):
     def __init__(self, path: str, count: int):
         super(AnimatedSprite, self).__init__()
-        self._surface_image = pygame.image.load(path)
+        self._surface_image = pygame.image.load(path).convert()
+        self._surface_image.set_colorkey((113, 102, 79))
         width = self._surface_image.get_width() / count
         self.surfaces = [self._surface_image.subsurface([i * width, 0, width, self._surface_image.get_height()]) for i
                          in range(count)]
