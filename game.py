@@ -1,11 +1,9 @@
 import pygame as pg
 from animated_sprite import AnimatedSprite
-
 from settings import *
 
 pg.init()
 WIDTH, HEIGHT = 1280, 720
-
 
 
 class Player(pg.sprite.Sprite):
@@ -29,6 +27,7 @@ class Player(pg.sprite.Sprite):
         self.image = pg.Surface((TILESIZE, TILESIZE))
         self.rect = self.image.get_rect(topleft=self.pos)
         self.image.fill((255, 0, 0))
+        self.direction = 0
 
     def move(self, x, y):
         self.change_status('run')
@@ -67,7 +66,6 @@ class CameraGroup(pg.sprite.Group):
     def __init__(self):
         super().__init__()
         self.display_surface = pg.display.get_surface()
-
         # camera offset
         self.offset = pg.math.Vector2()
         self.half_w = self.display_surface.get_size()[0] // 2
@@ -80,13 +78,13 @@ class CameraGroup(pg.sprite.Group):
         self.center_target_camera(player)
         ground_offset = self.ground_rect.topleft - self.offset
         self.display_surface.blit(self.ground_surf, ground_offset)
-
         # active elements
         for sprite in self.sprites():
-            self.display_surface.blit(sprite.image, (self.half_w, self.half_h))
-
-
-
+            # check whether to flip image or not based on direction
+            if player.direction == 0:  # right
+                self.display_surface.blit(sprite.image, (self.half_w, self.half_h))
+            else:  # left
+                self.display_surface.blit(pg.transform.flip(sprite.image, True, False), (self.half_w, self.half_h))
 
     def center_target_camera(self, target):
         self.offset.x = target.rect.centerx - self.half_w
@@ -99,6 +97,11 @@ def events(player):
             return False
         if event.type == pg.MOUSEBUTTONDOWN:
             mouse = pg.mouse.get_pos()
+            # CHANGE DIRECTION (0 = RIGHT, 1 = LEFT)
+            if mouse[0] >= WIDTH // 2:
+                player.direction = 0
+            else:
+                player.direction = 1
             player.move(mouse[0] - WIDTH // 2, mouse[1] - HEIGHT // 2)
     return True
 
