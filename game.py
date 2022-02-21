@@ -5,6 +5,7 @@ from settings import *
 
 pg.init()
 WIDTH, HEIGHT = 1280, 720
+BLACK, RED = "#000000", "#FF0000"
 
 
 class Tree(pg.sprite.Sprite):
@@ -30,13 +31,13 @@ class Player(pg.sprite.Sprite):
             'death': AnimatedSprite('Graphics/Knight/KnightDeath_strip.png', 15)
         }
         self.animation = self.animations[self.status]
-
         self.image = pg.Surface((TILESIZE, TILESIZE))
         self.rect = self.image.get_rect(topleft=pos)
         self.image.fill((255, 0, 0))
         self.direction = 0
         self.animation_tick = 0
         self.animation_speed = 1  # TODO: do something with this
+        self.health = 100
 
     def move(self, x, y):
         self.change_status('run')
@@ -55,6 +56,14 @@ class Player(pg.sprite.Sprite):
         for each iteration update pos by averaging the 'start' and 'end' for each axis
         """
         # TODO: check dt
+        if self.health <= 0:
+            self.change_status('death')
+            # TODO: fix death
+            return
+        # for testing health:
+        if self.health < 100:
+            self.health += 0.1
+
         if self.status == 'run':
             if self._i < self._t:
                 self.rect.center = (round(self._start[0] + (self._end[0] - self._start[0]) * self._i / self._t),
@@ -88,21 +97,54 @@ class CameraGroup(pg.sprite.Group):
         self.display_surface.blit(self.ground_surf, ground_offset)
         # active elements
         for sprite in sorted(self.sprites(), key=lambda sprite: sprite.rect.bottom):
-            # check whether to flip image or not based on direction
-            #if player.direction == 0:  # right
+            if sprite.__class__ is Player:
+                self.draw_player(sprite)
+                continue
             self.display_surface.blit(sprite.image, sprite.rect.center - self.offset)
-            #else:  # left
-                #self.display_surface.blit(pg.transform.flip(sprite.image, True, False), (self.half_w, self.half_h))
+
+    def draw_player(self, sprite: pg.sprite):
+        # check direction:
+        if sprite.direction == 1:  # left
+            self.display_surface.blit(pg.transform.flip(sprite.image, True, False), (self.half_w, self.half_h))
+            # HEALTH BAR:
+            pg.draw.rect(self.display_surface, BLACK,
+                         [sprite.rect.center[0] - self.offset[0] + 4, sprite.rect.center[1] - self.offset[1] + 4, 100,
+                          8], 0)
+            pg.draw.rect(self.display_surface, RED,
+                         [sprite.rect.center[0] - self.offset[0] + 6, sprite.rect.center[1] - self.offset[1] + 6,
+                          96 - (100 - sprite.health), 4], 0)
+            return
+        else:  # right
+            self.display_surface.blit(sprite.image, sprite.rect.center - self.offset)
+            # HEALTH BAR:
+            pg.draw.rect(self.display_surface, BLACK,
+                         [sprite.rect.center[0] - self.offset[0] + 4, sprite.rect.center[1] - self.offset[1] + 4, 100,
+                          8], 0)
+            pg.draw.rect(self.display_surface, RED,
+                         [sprite.rect.center[0] - self.offset[0] + 6, sprite.rect.center[1] - self.offset[1] + 6,
+                          96 - (100 - sprite.health), 4], 0)
+            return
 
     def center_target_camera(self, target):
         self.offset.x = target.rect.centerx - self.half_w
         self.offset.y = target.rect.centery - self.half_h
 
 
+def handle_keyboard(player, key):
+    """"handle the keyboard inputs"""
+    key = pg.key.name(key)
+    if key == '=' and player.health < 100:
+        player.health += 10
+    elif key == '-' and player.health > 0:
+        player.health -= 10
+
+
 def events(player):
     for event in pg.event.get():
         if event.type == pg.QUIT:
             return False
+        if event.type == pg.KEYDOWN:
+            handle_keyboard(player, event.key)
         if event.type == pg.MOUSEBUTTONDOWN:
             mouse = pg.mouse.get_pos()
             # CHANGE DIRECTION (0 = RIGHT, 1 = LEFT)
@@ -119,11 +161,13 @@ def run():
     screen = pg.display.set_mode((WIDTH, HEIGHT))
     camera_group = CameraGroup()
     player = Player((640, 360), camera_group)
+    player2 = Player((840, 460), camera_group)
     for i in range(20):
         random_x = randint(1000, 2000)
         random_y = randint(1000, 2000)
         Tree((random_x, random_y), camera_group)
     camera_group.custom_draw(player)
+    camera_group.custom_draw(player2)
 
     running = True
     while running:
@@ -134,6 +178,8 @@ def run():
         camera_group.custom_draw(player)
         pg.display.update()
         clock.tick(FPS)
+
+
 
     pg.quit()
 
