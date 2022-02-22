@@ -1,6 +1,6 @@
 import pygame as pg
 import pytmx
-from Settings import *
+from settings import *
 
 class Map:
     def __init__(self, filename):
@@ -15,7 +15,7 @@ class Map:
         self.height = self.tileheight * TILESIZE
 
 class TiledMap:
-    def __init__(self, filename, game):
+    def __init__(self, filename):
         tm = pytmx.load_pygame(filename, pixelalpha=True)
         self.width = tm.width * TILESIZE
         self.height = tm.height * TILESIZE
