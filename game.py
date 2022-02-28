@@ -1,5 +1,5 @@
 import pygame as pg
-from random import randint
+from random import randint, randrange
 from os import path
 from animated_sprite import AnimatedSprite
 from settings import *
@@ -9,6 +9,73 @@ pg.init()
 WIDTH, HEIGHT = 1280, 720
 BLACK, RED = "#000000", "#FF0000"
 
+class Mob(pg.sprite.Sprite):
+    def __init__(self, pos, all_sprites):
+        self.groups = all_sprites
+        pg.sprite.Sprite.__init__(self, self.groups)
+
+        self._start, self._end = (pos[0], pos[1]), (pos[0], pos[1])
+
+        self.status = 'idle'
+        self.health = randrange(20, 80)
+        self.animations = {
+            'idle': AnimatedSprite('graphics/Knight/KnightIdle_strip.png', 15),
+            'run': AnimatedSprite('graphics/Knight/KnightRun_strip.png', 8),
+            'death': AnimatedSprite('graphics/Knight/KnightDeath_strip.png', 15)
+        }
+        self.animation = self.animations[self.status]
+        self.image = pg.Surface((TILESIZE, TILESIZE))
+        self.rect = self.image.get_rect(topleft=pos)
+        self.normal_image = self.image
+        self.image.fill((255, 0, 0))
+        
+        self.animation_tick = 0
+        self.animation_speed = 1  # TODO: do something with this
+
+        self.walk_speed = 2
+        self.direction = 0
+
+    def move(self, x, y):
+        self.change_status('run')
+        self._start = self.rect.center
+        self._end = self._start[0] + x, self._start[1] + y
+        dist = ((self._end[0] - self._start[0]) ** 2 + (self._end[1] - self._start[1]) ** 2) ** 0.5
+        self._t = dist / self.walk_speed
+        self._i = 0
+
+
+    def change_status(self, status):
+        self.status = status
+        self.animation = self.animations[self.status]
+
+
+    def update(self):
+        if randint(1, 100) == 1:
+            dir_x = randint(-80, 80)
+            self.direction = dir_x < 0
+            self.move(dir_x, randint(-80, 80))
+
+        # RUNNING CALCULATIONS
+
+        if self.status == 'run':
+            if self._i < self._t:
+                self.rect.center = (round(self._start[0] + (self._end[0] - self._start[0]) * self._i / self._t),
+                            round(self._start[1] + (self._end[1] - self._start[1]) * self._i / self._t))
+                self._i += 1
+
+            else:
+                self.rect.center = self._end
+                self.change_status('idle')
+
+        if self.animation_tick % 4 == 0:
+            self.animation.update()
+
+        self.animation_tick += 1
+        self.image = self.animation.image
+
+        if self.direction:
+            self.image = pg.transform.flip(self.image, True, False)
+
 
 class Player(pg.sprite.Sprite):
     def __init__(self, pos, all_sprites):
@@ -16,7 +83,7 @@ class Player(pg.sprite.Sprite):
         pg.sprite.Sprite.__init__(self, self.groups)
 
         self.walk_speed = 5
-        self._start, self._end = (0, 0), (0, 0)
+        self._start, self._end = (pos[0], pos[1]), (pos[0], pos[1])
         self._i = 0
         self._t = 1
         self.status = 'idle'
@@ -137,6 +204,7 @@ def run():
     all_sprites = pg.sprite.Group()
 
     player = Player((640, 360), all_sprites)
+    mob = Mob((600, 390), all_sprites)
 
     # SETTING UP MAP
 
