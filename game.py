@@ -19,9 +19,9 @@ class Mob(pg.sprite.Sprite):
         self.status = 'idle'
         self.health = randrange(20, 80)
         self.animations = {
-            'idle': AnimatedSprite('graphics/Knight/KnightIdle_strip.png', 15),
-            'run': AnimatedSprite('graphics/Knight/KnightRun_strip.png', 8),
-            'death': AnimatedSprite('graphics/Knight/KnightDeath_strip.png', 15)
+            'idle': AnimatedSprite('graphics/small_dragon/Idle', 3, False),
+            'run': AnimatedSprite('graphics/small_dragon/Walk', 4, False),
+            'death': AnimatedSprite('graphics/Knight/KnightDeath_strip.png', 15, True)
         }
         self.animation = self.animations[self.status]
         self.image = pg.Surface((TILESIZE, TILESIZE))
@@ -67,7 +67,7 @@ class Mob(pg.sprite.Sprite):
                 self.rect.center = self._end
                 self.change_status('idle')
 
-        if self.animation_tick % 4 == 0:
+        if self.animation_tick % 10 == 0:
             self.animation.update()
 
         self.animation_tick += 1
@@ -75,6 +75,10 @@ class Mob(pg.sprite.Sprite):
 
         if self.direction:
             self.image = pg.transform.flip(self.image, True, False)
+
+    def draw(self, screen, camera):
+        screen.blit(self.image, camera.apply(self))
+        pg.draw.line(screen, (255, 0, 0), (self.rect.center[0], self.rect.center[1] - 100), (self.rect.center[0] + self.health, self.rect.center[1] - 100))
 
 
 class Player(pg.sprite.Sprite):
@@ -88,9 +92,9 @@ class Player(pg.sprite.Sprite):
         self._t = 1
         self.status = 'idle'
         self.animations = {
-            'idle': AnimatedSprite('graphics/Knight/KnightIdle_strip.png', 15),
-            'run': AnimatedSprite('graphics/Knight/KnightRun_strip.png', 8),
-            'death': AnimatedSprite('graphics/Knight/KnightDeath_strip.png', 15)
+            'idle': AnimatedSprite('graphics/Knight/KnightIdle_strip.png', 15, True),
+            'run': AnimatedSprite('graphics/Knight/KnightRun_strip.png', 8, True),
+            'death': AnimatedSprite('graphics/Knight/KnightDeath_strip.png', 15, True)
         }
         self.animation = self.animations[self.status]
         self.image = pg.Surface((TILESIZE, TILESIZE))
@@ -149,6 +153,12 @@ class Player(pg.sprite.Sprite):
         if self.direction:
             self.image = pg.transform.flip(self.image, True, False)
 
+    def draw(self, screen, camera):
+        screen.blit(self.image, camera.apply(self))
+        pg.draw.line(screen, (255, 0, 0), (self.rect.center[0], self.rect.center[1] - 100), (self.rect.center[0] + self.health, self.rect.center[1] - 100))
+
+
+
 def handle_keyboard(player, key):
     """"handle the keyboard inputs"""
     key = pg.key.name(key)
@@ -193,6 +203,7 @@ def draw(screen, all_sprites, map_img, map_rect, camera):
 
     for sprite in all_sprites:
         screen.blit(sprite.image, camera.apply(sprite))
+        sprite.draw(screen, camera)
 
     pg.display.update()
 
@@ -203,8 +214,8 @@ def run():
 
     all_sprites = pg.sprite.Group()
 
-    player = Player((640, 360), all_sprites)
-    mob = Mob((600, 390), all_sprites)
+    player = Player((1400, 1360), all_sprites)
+    mob = Mob((1600, 1390), all_sprites)
 
     # SETTING UP MAP
 
