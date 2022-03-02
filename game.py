@@ -33,7 +33,6 @@ class Entity(pg.sprite.Sprite):
         self.health = 100
 
     def move(self, x, y):
-        print(f"x: {x}, y: {y}")
         self.change_status('run')
         self._start = self.rect.center
         self._end = self._start[0] + x, self._start[1] + y
@@ -43,6 +42,7 @@ class Entity(pg.sprite.Sprite):
 
     def change_status(self, status):
         self.status = status
+        self.animations[self.status].surface_index = 0
         self.animation = self.animations[self.status]
 
     def update(self, map_rect):
@@ -75,7 +75,7 @@ class Entity(pg.sprite.Sprite):
             else:
                 self.rect.center = self._end
                 self.change_status('idle')
-
+            
         if self.animation_tick % self.anim_speed == 0:
             self.animation.update()
 
@@ -84,17 +84,26 @@ class Entity(pg.sprite.Sprite):
 
         if self.direction:
             self.image = pg.transform.flip(self.image, True, False)
+            
+        if self.status == 'attack':
+            if self.animation.surface_index == len(self.animation.surfaces) - 1:
+                print("FINISHED ATTACKING")
+                self.change_status('idle')
 
     def draw(self, screen, camera):
         screen.blit(self.image, camera.apply(self))
         pg.draw.line(screen, (255, 0, 0),
                      (camera.apply(self).topleft[0], camera.apply(self).topleft[1] - 20),
                      (camera.apply(self).topleft[0] + self.health, camera.apply(self).topleft[1] - 20))
-        
+    
+    def melee_attack(self):
+        self.change_status('attack')
     
 
 def handle_keyboard(player, key):
-    pass
+    if key == 120:
+        print("ATTACKING")
+        player.melee_attack()
 
 
 def events(player, camera):
@@ -148,7 +157,8 @@ def run():
     player_anims = {
         'idle': AnimatedSprite('graphics/Knight/KnightIdle_strip.png', 15, True),
         'run': AnimatedSprite('graphics/Knight/KnightRun_strip.png', 8, True),
-        'death': AnimatedSprite('graphics/Knight/KnightDeath_strip.png', 15, True)
+        'death': AnimatedSprite('graphics/Knight/KnightDeath_strip.png', 15, True),
+        'attack': AnimatedSprite('graphics/Knight/KnightAttack_strip.png', 22, True)
     }
     mob_anims = [
         {
