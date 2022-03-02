@@ -49,7 +49,7 @@ class Mob(pg.sprite.Sprite):
         self.animation = self.animations[self.status]
 
 
-    def update(self):
+    def update(self, map_rect):
         if randint(1, 100) == 1:
             dir_x = randint(-80, 80)
             self.direction = dir_x < 0
@@ -59,8 +59,8 @@ class Mob(pg.sprite.Sprite):
 
         if self.status == 'run':
             if self._i < self._t:
-                self.rect.center = (round(self._start[0] + (self._end[0] - self._start[0]) * self._i / self._t),
-                            round(self._start[1] + (self._end[1] - self._start[1]) * self._i / self._t))
+                self.rect.center = (min(max(round(self._start[0] + (self._end[0] - self._start[0]) * self._i / self._t), 0), map_rect.width),
+                                    min(max(round(self._start[1] + (self._end[1] - self._start[1]) * self._i / self._t), 0), map_rect.height))
                 self._i += 1
 
             else:
@@ -78,7 +78,9 @@ class Mob(pg.sprite.Sprite):
 
     def draw(self, screen, camera):
         screen.blit(self.image, camera.apply(self))
-        pg.draw.line(screen, (255, 0, 0), (self.rect.center[0], self.rect.center[1] - 100), (self.rect.center[0] + self.health, self.rect.center[1] - 100))
+        pg.draw.line(screen, (255, 0, 0),
+                     (camera.apply(self).topleft[0], camera.apply(self).topleft[1] - 20),
+                     (camera.apply(self).topleft[0] + self.health, camera.apply(self).topleft[1] - 20))
 
 
 class Player(pg.sprite.Sprite):
@@ -107,6 +109,7 @@ class Player(pg.sprite.Sprite):
         self.health = 100
 
     def move(self, x, y):
+        print(f"x: {x}, y: {y}")
         self.change_status('run')
         self._start = self.rect.center
         self._end = self._start[0] + x, self._start[1] + y
@@ -118,7 +121,7 @@ class Player(pg.sprite.Sprite):
         self.status = status
         self.animation = self.animations[self.status]
 
-    def update(self):
+    def update(self, map_rect):
         """"
             UPDATES PLAYER LOCATION:
             for each iteration update pos by averaging the 'start' and 'end' for each axis
@@ -136,8 +139,8 @@ class Player(pg.sprite.Sprite):
 
         if self.status == 'run':
             if self._i < self._t:
-                self.rect.center = (round(self._start[0] + (self._end[0] - self._start[0]) * self._i / self._t),
-                            round(self._start[1] + (self._end[1] - self._start[1]) * self._i / self._t))
+                self.rect.center = (min(max(round(self._start[0] + (self._end[0] - self._start[0]) * self._i / self._t), 0), map_rect.width),
+                                    min(max(round(self._start[1] + (self._end[1] - self._start[1]) * self._i / self._t), 0), map_rect.height))
                 self._i += 1
 
             else:
@@ -155,20 +158,12 @@ class Player(pg.sprite.Sprite):
 
     def draw(self, screen, camera):
         screen.blit(self.image, camera.apply(self))
-        pg.draw.line(screen, (255, 0, 0), (self.rect.center[0], self.rect.center[1] - 100), (self.rect.center[0] + self.health, self.rect.center[1] - 100))
+        pg.draw.line(screen, (255, 0, 0),
+                     (camera.apply(self).topleft[0], camera.apply(self).topleft[1] - 20),
+                     (camera.apply(self).topleft[0] + self.health, camera.apply(self).topleft[1] - 20))
 
 
-
-def handle_keyboard(player, key):
-    """"handle the keyboard inputs"""
-    key = pg.key.name(key)
-    if key == '=' and player.health < 100:
-        player.health += 10
-    elif key == '-' and player.health > 0:
-        player.health -= 10
-
-
-def events(player):
+def events(player, camera):
     for event in pg.event.get():
         if event.type == pg.QUIT:
             return False
@@ -178,20 +173,22 @@ def events(player):
             mouse = pg.mouse.get_pos()
 
             # CHANGE DIRECTION (0 = RIGHT, 1 = LEFT)
-            if mouse[0] >= WIDTH // 2:
+            if mouse[0] >= camera.apply(player).topleft[0]:
                 player.direction = 0
             else:
                 player.direction = 1
             
             # MOVE THE PLAYER ACCORDING TO MOUSE POS
-            player.move(mouse[0] - WIDTH // 2, mouse[1] - HEIGHT // 2)
+            player.move(mouse[0] - camera.apply(player).topleft[0],
+                        mouse[1] - camera.apply(player).topleft[1])
+            print(player._end)
     return True
 
 
-def update(all_sprites, player, camera):
+def update(all_sprites, player, camera, map_rect):
 
     for sprite in all_sprites:
-        sprite.update()
+        sprite.update(map_rect)
 
     camera.update(player)
 
@@ -232,8 +229,8 @@ def run():
 
     running = True
     while running:
-        running = events(player)
-        update(all_sprites, player, camera)
+        running = events(player, camera)
+        update(all_sprites, player, camera, map_rect)
         draw(screen, all_sprites, map_img, map_rect, camera)
         clock.tick(FPS)
 
