@@ -12,12 +12,12 @@ def join(server: socket):
     # Function that handles the client joining the server through the load balancer. Recives socket, returns server address ("IP",PORT) of server and data.
     server.sendto(build_header().zfill(HEADER_SIZE).encode(), (IP, PORT))
     data, server_address = server.recvfrom(HEADER_SIZE)
-    data.decode()
+    data = data.decode()
     return server_address, data
 
 
 def build_header():
-    return 'hello  world'
+    return 'hello world'
 
 
 if __name__ == '__main__':

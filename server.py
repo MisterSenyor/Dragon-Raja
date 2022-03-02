@@ -18,7 +18,7 @@ def main():
     server.bind((IP, PORT))
     while True:
         data, client_address = server.recvfrom(HEADER_SIZE)
-        data.decode()
+        data = data.decode()
         print(data)
 
         server.sendto(build_header().zfill(HEADER_SIZE).encode(), client_address)
