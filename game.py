@@ -10,12 +10,13 @@ WIDTH, HEIGHT = 1280, 720
 BLACK, RED = "#000000", "#FF0000"
 
 class Entity(pg.sprite.Sprite):
-    def __init__(self, pos, sprite_groups, animations, walk_speed, anim_speed):
+    def __init__(self, pos, sprite_groups, animations, walk_speed, anim_speed, auto_move=False):
         self.groups = sprite_groups
         pg.sprite.Sprite.__init__(self, self.groups)
 
         self.walk_speed = walk_speed
         self.anim_speed = anim_speed
+        self.auto_move = auto_move
         self._start, self._end = (pos[0], pos[1]), (pos[0], pos[1])
         self._i = 0
         self._t = 1
@@ -50,6 +51,14 @@ class Entity(pg.sprite.Sprite):
             for each iteration update pos by averaging the 'start' and 'end' for each axis
         """
         # TODO: check dt
+        if self.auto_move and randrange(1, 100) == 1:
+            dir_x = randrange(-80, 80)
+            if dir_x < 0:
+                self.direction = 1
+            else:
+                self.direction = 0
+            self.move(dir_x, randrange(-80, 80))
+        
         if self.health <= 0:
             self.change_status('death')
             # TODO: fix death
@@ -150,7 +159,7 @@ def run():
     ]
 
     player = Entity((1400, 1360), [all_sprites], player_anims, 5, 5)
-    mob = Entity((1600, 1390), [all_sprites], choice(mob_anims), 2, 15)
+    mob = Entity((1600, 1390), [all_sprites], choice(mob_anims), 2, 15, auto_move=True)
 
     # SETTING UP MAP
 
