@@ -4,10 +4,56 @@ from os import path
 from animated_sprite import AnimatedSprite
 from settings import *
 from Tilemap import *
+import math
+
 
 pg.init()
-WIDTH, HEIGHT = 1280, 720
-BLACK, RED = "#000000", "#FF0000"
+
+
+class Projectile(pg.sprite.Sprite):
+    """" PROJECTILE CLASS. GETS TYPE OF PROJECTILE, ATTACKER (PLAYER/MOB), TARGET VECTOR, SPRITE_GROUPS"""
+    def __init__(self, type, attacker, vect: pg.math.Vector2, sprite_groups):
+        self.groups = sprite_groups
+        pg.sprite.Sprite.__init__(self, self.groups)
+
+        self._start = attacker.rect.center
+        self.image = pg.image.load('graphics/projectiles/' + type + ".png")
+        self.rect = self.image.get_rect(topleft=self._start)
+        self.angle = vect.as_polar()[1]  # VECTOR ANGLE
+
+        # CHECK EACH TYPE:
+        if type == 'arrow':
+            self._speed = 10
+            self.damage = 20
+            self.image = pg.transform.rotate(self.image, 230 + self.angle)  # ROTATE SO IT'S FACING IN ITS DIRECTION
+        elif type == 'axe':
+            self._speed = 10
+            self.damage = 20
+            self.image = pg.transform.rotate(self.image, 310 + self.angle)
+        else:
+            self._speed = 10
+            self.damage = 20
+
+        # X,Y AXIS SPEEDS:
+        self._speed_x = (vect.x / vect.length()) * self._speed
+        self._speed_y = - (vect.y / vect.length()) * self._speed
+
+        self._i = 0  # ITERATION
+
+    def update(self, map_rect):
+        """" UPDATES PROJECTILE: RECT POS, BORDER AND ENTITY COLLISIONS"""
+        # TODO: check collision with enemy
+
+        # UPDATE POS WITH EACH AXIS SPEED BY ITERATION:
+        self._i += 1
+        self.rect.center = self._start[0] + (self._speed_x * self._i),  self._start[1] + (self._speed_y * self._i)
+        # CHECK BORDERS:
+        if self.rect.centerx > map_rect.width or self.rect.centerx < 0 or self.rect.centery > map_rect.height or self.rect.centery < 0:
+            self.remove(self.groups)
+
+    def draw(self, screen, camera):
+        screen.blit(self.image, camera.apply(self))
+
 
 class Entity(pg.sprite.Sprite):
     def __init__(self, pos, sprite_groups, animations, walk_speed, anim_speed, auto_move=False):
@@ -68,6 +114,7 @@ class Entity(pg.sprite.Sprite):
 
         if self.status == 'run':
             if self._i < self._t:
+                # UPDATE RECT AND BORDERS COLLISION CHECK:
                 self.rect.center = (min(max(round(self._start[0] + (self._end[0] - self._start[0]) * self._i / self._t), 0), map_rect.width),
                                     min(max(round(self._start[1] + (self._end[1] - self._start[1]) * self._i / self._t), 0), map_rect.height))
                 self._i += 1
@@ -97,13 +144,23 @@ class Entity(pg.sprite.Sprite):
                      (camera.apply(self).topleft[0] + self.health, camera.apply(self).topleft[1] - 20))
     
     def melee_attack(self):
+        if self.status == "attack": # CHECK IF ALREADY ATTACKING
+            return
         self.change_status('attack')
     
 
 def handle_keyboard(player, key):
-    if key == 120:
+    if key == 120: # X KEY
         print("ATTACKING")
         player.melee_attack()
+    elif key == 122:  # Z key
+        # GET VECTOR FOR PROJECTILE:
+        vect = pg.math.Vector2(pg.mouse.get_pos()[0] - WIDTH // 2,  HEIGHT // 2 - pg.mouse.get_pos()[1])
+        axe = Projectile("axe", player, vect, player.groups)
+    elif key == 99:  # C KEY
+        # GET VECTOR FOR PROJECTILE:
+        vect = pg.math.Vector2(pg.mouse.get_pos()[0] - WIDTH // 2,  HEIGHT // 2 - pg.mouse.get_pos()[1])
+        arrow = Projectile("arrow", player, vect, player.groups)
 
 
 def events(player, camera):
@@ -190,7 +247,6 @@ def run():
         update(all_sprites, player, camera, map_rect)
         draw(screen, all_sprites, map_img, map_rect, camera)
         clock.tick(FPS)
-
 
     pg.quit()
 
