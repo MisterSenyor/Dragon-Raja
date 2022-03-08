@@ -12,6 +12,51 @@ import math
 pg.init()
 
 
+class Item(pg.sprite.Sprite):
+    def __init__(self, item_type, owner):
+        self.group = owner.items
+        pg.sprite.Sprite.__init__(self, self.group)
+        self.item_type = item_type
+        self.owner = owner
+        self.image = pg.image.load('graphics/items/' + item_type + ".png")
+        self.duration = 0  # duration of item's effect to last
+
+    def use_item(self):
+        """" USES ITEM. FOR EACH ITEM EXISTS A SPECIAL EFFECT AND DURATION"""
+        if self.item_type == 'strength_pot':
+            self.owner.attack_dmg += 10
+            self.duration = 1000
+        elif self.item_type == 'heal_pot':
+            if self.owner.health < 80:
+                self.owner.health += 20
+            else:
+                self.owner.health = 100
+            self.remove(self.group)  # HEAL POT IS INSTANT. REMOVE FROM GROUP
+        elif self.item_type == 'speed_pot':
+            self.owner.walk_speed += 3
+            self.duration = 1000
+        elif self.item_type == 'useless_card':
+            return
+        else:
+            self.owner.health = 100
+
+    def update(self):
+        # DECREASE DURATION IN EACH TICK
+        self.duration -= 1
+
+        # CHECK IF DURATION ENDED:
+        if self.duration == 0:
+
+            # RESET EFFECT AND REMOVE FROM ITEM GROUP:
+            if self.item_type == 'strength_pot':
+                self.owner.attack_dmg -= 10
+                self.duration = 100
+            elif self.item_type == 'speed_pot':
+                self.owner.walk_speed -= 3
+                self.duration = 100
+            self.remove(self.group)
+
+
 class Projectile(pg.sprite.Sprite):
     """" PROJECTILE CLASS. GETS TYPE OF PROJECTILE, ATTACKER (PLAYER/MOB), TARGET VECTOR, ALL_SPRITE_GROUPS
          TARGET VECTOR IS SCREEN VECTOR FROM PLAYER TO MOUSE """
@@ -36,6 +81,7 @@ class Projectile(pg.sprite.Sprite):
             self.damage = 20
             self.image = pg.transform.rotate(self.image, 310 + self.angle)
         else:
+            self.image = pg.transform.rotate(self.image, self.angle)
             self._speed = 10
             self.damage = 20
 
@@ -71,6 +117,7 @@ class Entity(pg.sprite.Sprite):
         pg.sprite.Sprite.__init__(self, self.groups[0], self.groups[1])
         # self.groups[0]: all sprites, self.groups[1]: entity sprites
 
+        self.items = pg.sprite.Group()
         self.walk_speed = walk_speed
         self.anim_speed = anim_speed
         self.auto_move = auto_move
@@ -109,6 +156,9 @@ class Entity(pg.sprite.Sprite):
         UPDATES PLAYER LOCATION:
         for each iteration update pos by averaging the 'start' and 'end' for each axis
         """
+        for item in self.items:
+            item.update()
+
         if self.health <= 0:
             self.handle_death()
             return
@@ -208,6 +258,19 @@ def handle_keyboard(player, camera, key):
         arrow = Projectile("arrow", player, vect, player.groups)
         update_dir(player, camera)
 
+    # POTIONS (FOR TESTING)
+    elif key == 112:  # P KEY
+        print("INCREASING SPEED")
+        speed_pot = Item("speed_pot", player)
+        player.items.add(speed_pot)
+        speed_pot.use_item()
+
+    elif key == 111:  # O KEY
+        print("INCREASING ATTACK MELEE DAMAGE")
+        strength_pot = Item("strength_pot", player)
+        player.items.add(strength_pot)
+        strength_pot.use_item()
+
 
 def events(player, camera):
     for event in pg.event.get():
@@ -290,6 +353,7 @@ def run():
     # SETTING UP CAMERA
     
     camera = Camera(tiled_map.width, tiled_map.height)
+    pg.mouse.set_cursor(pg.cursors.broken_x)
 
     running = True
     while running:
