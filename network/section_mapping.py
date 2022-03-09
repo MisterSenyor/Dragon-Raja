@@ -1,7 +1,7 @@
 from dataclasses import dataclass, asdict
 from typing import Tuple, Sequence
 
-from utils import Address
+from network.utils import Address
 
 
 def default_mapping(servers: Sequence[Address], map_size: Tuple[int, int]):

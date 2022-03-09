@@ -6,10 +6,10 @@ import threading
 import time
 from typing import Dict, Sequence, Tuple, Set
 
-from player import Player
-from section_mapping import default_mapping
+from network.player import Player
+from network.section_mapping import default_mapping
 from settings import *
-from utils import parse_cmd, serialize_cmd, Address, socket_handler
+from network.utils import parse_cmd, serialize_cmd, Address, socket_handler
 
 
 class SectionServer:
