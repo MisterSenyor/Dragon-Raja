@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field, asdict
 from typing import Tuple
 
-from utils import distance
+from network.utils import distance
 
 
 @dataclass
