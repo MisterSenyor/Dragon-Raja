@@ -1,7 +1,12 @@
 import socket
 
-IP = socket.gethostbyname(socket.gethostname())
-PORT = 1337
+# IP = socket.gethostbyname(socket.gethostname())
+IP = '127.0.0.1'
+PORT = 13337
+
+SERVER_IP = '127.0.0.1'
+SERVER_PORT = 22222
+
 HEADER_SIZE = 32
 ENCODING = 'utf-8'
 

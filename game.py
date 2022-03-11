@@ -1,13 +1,11 @@
-import pygame as pg
-from random import randint, randrange, choice
+import random
+import threading
 from os import path
+from random import randint, randrange, choice
 
-import settings
-from animated_sprite import AnimatedSprite
-from settings import *
+import client
 from Tilemap import *
-import math
-
+from animated_sprite import AnimatedSprite
 
 pg.init()
 
@@ -17,7 +15,7 @@ class Entity(pg.sprite.Sprite):
         self.groups = sprite_groups
         pg.sprite.Sprite.__init__(self, self.groups[0], self.groups[1])
         # self.groups[0]: all sprites, self.groups[1]: entity sprites
-
+        self.id = random.randint(0, 1000000)
         self.items = pg.sprite.Group()
         self.walk_speed = walk_speed
         self.anim_speed = anim_speed
@@ -79,10 +77,10 @@ class Entity(pg.sprite.Sprite):
             if self._i < self._t:
                 # UPDATE RECT AND BORDERS COLLISION CHECK:
                 self.rect.center = (
-                min(max(round(self._start[0] + (self._end[0] - self._start[0]) * self._i / self._t), 0),
-                    map_rect.width),
-                min(max(round(self._start[1] + (self._end[1] - self._start[1]) * self._i / self._t), 0),
-                    map_rect.height))
+                    min(max(round(self._start[0] + (self._end[0] - self._start[0]) * self._i / self._t), 0),
+                        map_rect.width),
+                    min(max(round(self._start[1] + (self._end[1] - self._start[1]) * self._i / self._t), 0),
+                        map_rect.height))
                 self._i += 1
 
             else:
@@ -137,6 +135,7 @@ class Entity(pg.sprite.Sprite):
 
 class Item(pg.sprite.Sprite):
     """" ITEM CLASS, GETS ITEM TYPE, OWNER (ENTITY)"""
+
     def __init__(self, item_type, owner):
         self.group = owner.items
         pg.sprite.Sprite.__init__(self, self.group)
@@ -233,6 +232,7 @@ class Inventory:
 class Projectile(pg.sprite.Sprite):
     """" PROJECTILE CLASS. GETS TYPE OF PROJECTILE, ATTACKER (PLAYER/MOB), TARGET VECTOR, ALL_SPRITE_GROUPS
          TARGET VECTOR IS SCREEN VECTOR FROM PLAYER TO MOUSE """
+
     def __init__(self, proj_type, attacker: Entity, vect: pg.math.Vector2, all_sprite_groups):
         self.groups = all_sprite_groups
         pg.sprite.Sprite.__init__(self, self.groups[0], self.groups[2])
@@ -269,7 +269,7 @@ class Projectile(pg.sprite.Sprite):
 
         # UPDATE POS WITH EACH AXIS SPEED BY ITERATION:
         self._i += 1
-        self.rect.center = self._start[0] + (self._speed_x * self._i),  self._start[1] + (self._speed_y * self._i)
+        self.rect.center = self._start[0] + (self._speed_x * self._i), self._start[1] + (self._speed_y * self._i)
         # CHECK BORDERS:
         if self.rect.centerx > map_rect.width or self.rect.centerx < 0 or self.rect.centery > map_rect.height or self.rect.centery < 0:
             self.remove(self.groups[0], self.groups[2])
@@ -301,13 +301,13 @@ def handle_keyboard(player, inv, camera, key):
 
     elif key == 122:  # Z key
         # GET VECTOR FOR PROJECTILE:
-        vect = pg.math.Vector2(pg.mouse.get_pos()[0] - WIDTH // 2,  HEIGHT // 2 - pg.mouse.get_pos()[1])
+        vect = pg.math.Vector2(pg.mouse.get_pos()[0] - WIDTH // 2, HEIGHT // 2 - pg.mouse.get_pos()[1])
         axe = Projectile("axe", player, vect, player.groups)
         update_dir(player, camera)
 
     elif key == 99:  # C KEY
         # GET VECTOR FOR PROJECTILE:
-        vect = pg.math.Vector2(pg.mouse.get_pos()[0] - WIDTH // 2,  HEIGHT // 2 - pg.mouse.get_pos()[1])
+        vect = pg.math.Vector2(pg.mouse.get_pos()[0] - WIDTH // 2, HEIGHT // 2 - pg.mouse.get_pos()[1])
         arrow = Projectile("arrow", player, vect, player.groups)
         update_dir(player, camera)
 
@@ -323,7 +323,6 @@ def handle_keyboard(player, inv, camera, key):
 def handle_mouse(player, event, inv, camera):
     # CHECK LEFT CLICK:
     if event.button == 1:
-        
         # UPDATE DIRECTION:
         update_dir(player, camera)
 
@@ -332,7 +331,7 @@ def handle_mouse(player, event, inv, camera):
         player.move(mouse[0] - camera.apply(player).topleft[0],
                     mouse[1] - camera.apply(player).topleft[1])
         return
-    
+
     # CHECK MOUSE SCROLL WHEEL:
     if event.button > 3:
         if event.button % 2 == 0 and inv.cur_slot < 14:  # SCROLL UP
@@ -355,7 +354,6 @@ def events(player, inv, camera):
 
 
 def update(all_sprites, player, camera, map_rect):
-
     for sprite in all_sprites:
         sprite.update(map_rect)
 
@@ -377,7 +375,8 @@ def draw(screen, all_sprites, map_img, map_rect, inv, camera):
 def create_enemies(all_sprites, mob_anims):
     mobs = []
     for i in range(0, 100):
-        mobs.append(Entity((randint(0, 12000), randint(0, 7600)), all_sprites, choice(mob_anims), 2, 15, auto_move=True))
+        mobs.append(
+            Entity((randint(0, 12000), randint(0, 7600)), all_sprites, choice(mob_anims), 2, 15, auto_move=True))
 
 
 def run():
@@ -388,7 +387,7 @@ def run():
     entity_sprites = pg.sprite.Group()
     projectile_sprites = pg.sprite.Group()
     all_sprite_groups = [all_sprites, entity_sprites, projectile_sprites]
-    
+
     player_anims = {
         'idle': AnimatedSprite('graphics/Knight/KnightIdle_strip.png', 15, True),
         'run': AnimatedSprite('graphics/Knight/KnightRun_strip.png', 8, True),
@@ -407,6 +406,16 @@ def run():
     mob = Entity((1600, 1390), all_sprite_groups, choice(mob_anims), 2, 15, auto_move=True)
     create_enemies(all_sprite_groups, mob_anims)
 
+    player2 = Entity((1200, 1300), all_sprite_groups, player_anims, 5, 5)
+    print(player2.id)
+    player2.move(100, 100)
+    # SETTING UP CLIENT
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.bind((IP, PORT))
+    game_client = client.Client(sock=sock, server=(SERVER_IP, SERVER_PORT))
+    threading.Thread(target=game_client.receive_updates, args=(entity_sprites,)).start()
+
     # SETTING UP MAP
 
     map_folder = 'maps'
@@ -416,7 +425,7 @@ def run():
     map_rect = map_img.get_rect()
 
     # SETTING UP CAMERA
-    
+
     camera = Camera(tiled_map.width, tiled_map.height)
     pg.mouse.set_cursor(pg.cursors.broken_x)
 
