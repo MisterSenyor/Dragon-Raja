@@ -10,10 +10,11 @@ class Network:
         self.ENCODING = 'utf-8'
         self.addr = (self.IP, self.port)
         self.pos = ((1400, 1360))
+        self.id = self.connect()
 
 
-    def getPos(self):
-        return self.pos
+    def connect(self):
+        pass
 
     def send(self, data):
         try:

@@ -1,4 +1,4 @@
-from netWork.network_test import Network
+from temp_network import Network
 import pygame as pg
 def read_pos(str):
     str = str.split(",")
