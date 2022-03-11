@@ -1,114 +1,13 @@
-import pygame as pg
-from random import randint, randrange, choice
+import random
+import threading
 from os import path
+from random import randint, randrange, choice
 
-import settings
-from animated_sprite import AnimatedSprite
-from settings import *
+import client
 from Tilemap import *
-import math
-
+from animated_sprite import AnimatedSprite
 
 pg.init()
-
-
-class Item(pg.sprite.Sprite):
-    def __init__(self, item_type, owner):
-        self.group = owner.items
-        pg.sprite.Sprite.__init__(self, self.group)
-        self.item_type = item_type
-        self.owner = owner
-        self.image = pg.image.load('graphics/items/' + item_type + ".png")
-        self.duration = 0  # duration of item's effect to last
-
-    def use_item(self):
-        """" USES ITEM. FOR EACH ITEM EXISTS A SPECIAL EFFECT AND DURATION"""
-        if self.item_type == 'strength_pot':
-            self.owner.attack_dmg += 10
-            self.duration = 1000
-        elif self.item_type == 'heal_pot':
-            if self.owner.health < 80:
-                self.owner.health += 20
-            else:
-                self.owner.health = 100
-            self.remove(self.group)  # HEAL POT IS INSTANT. REMOVE FROM GROUP
-        elif self.item_type == 'speed_pot':
-            self.owner.walk_speed += 3
-            self.duration = 1000
-        elif self.item_type == 'useless_card':
-            return
-        else:
-            self.owner.health = 100
-
-    def update(self):
-        # DECREASE DURATION IN EACH TICK
-        self.duration -= 1
-
-        # CHECK IF DURATION ENDED:
-        if self.duration == 0:
-
-            # RESET EFFECT AND REMOVE FROM ITEM GROUP:
-            if self.item_type == 'strength_pot':
-                self.owner.attack_dmg -= 10
-                self.duration = 100
-            elif self.item_type == 'speed_pot':
-                self.owner.walk_speed -= 3
-                self.duration = 100
-            self.remove(self.group)
-
-
-class Projectile(pg.sprite.Sprite):
-    """" PROJECTILE CLASS. GETS TYPE OF PROJECTILE, ATTACKER (PLAYER/MOB), TARGET VECTOR, ALL_SPRITE_GROUPS
-         TARGET VECTOR IS SCREEN VECTOR FROM PLAYER TO MOUSE """
-    def __init__(self, proj_type, attacker, vect: pg.math.Vector2, all_sprite_groups):
-        self.groups = all_sprite_groups
-        pg.sprite.Sprite.__init__(self, self.groups[0], self.groups[2])
-        # self.groups[0]: all sprites, self.groups[2]: projectile sprites
-
-        self._start = attacker.rect.center
-        self.attacker = attacker
-        self.image = pg.image.load('graphics/projectiles/' + proj_type + ".png")
-        self.rect = self.image.get_rect(topleft=self._start)
-        self.angle = vect.as_polar()[1]  # VECTOR ANGLE
-
-        # CHECK EACH TYPE:
-        if proj_type == 'arrow':
-            self._speed = 10
-            self.damage = 20
-            self.image = pg.transform.rotate(self.image, 230 + self.angle)  # ROTATE SO IT'S FACING IN ITS DIRECTION
-        elif proj_type == 'axe':
-            self._speed = 10
-            self.damage = 20
-            self.image = pg.transform.rotate(self.image, 310 + self.angle)
-        else:
-            self.image = pg.transform.rotate(self.image, self.angle)
-            self._speed = 10
-            self.damage = 20
-
-        # X,Y AXIS SPEEDS:
-        self._speed_x = (vect.x / vect.length()) * self._speed
-        self._speed_y = - (vect.y / vect.length()) * self._speed
-
-        self._i = 0  # ITERATION
-
-    def update(self, map_rect):
-        """" UPDATES PROJECTILE: RECT POS, BORDER AND ENTITY COLLISIONS"""
-
-        # UPDATE POS WITH EACH AXIS SPEED BY ITERATION:
-        self._i += 1
-        self.rect.center = self._start[0] + (self._speed_x * self._i),  self._start[1] + (self._speed_y * self._i)
-        # CHECK BORDERS:
-        if self.rect.centerx > map_rect.width or self.rect.centerx < 0 or self.rect.centery > map_rect.height or self.rect.centery < 0:
-            self.remove(self.groups[0], self.groups[2])
-
-        # CHECK COLLISION WITH ENTITIES:
-        for sprite in self.groups[1]:  # groups[1] - all entities (players/mobs)
-            if sprite is not self.attacker and pg.sprite.collide_rect(self, sprite):
-                sprite.health -= self.damage
-                self.remove(self.groups[0], self.groups[2])
-
-    def draw(self, screen, camera):
-        screen.blit(self.image, camera.apply(self))
 
 
 class Entity(pg.sprite.Sprite):
@@ -116,7 +15,7 @@ class Entity(pg.sprite.Sprite):
         self.groups = sprite_groups
         pg.sprite.Sprite.__init__(self, self.groups[0], self.groups[1])
         # self.groups[0]: all sprites, self.groups[1]: entity sprites
-
+        self.id = random.randint(0, 1000000)
         self.items = pg.sprite.Group()
         self.walk_speed = walk_speed
         self.anim_speed = anim_speed
@@ -171,14 +70,17 @@ class Entity(pg.sprite.Sprite):
             else:
                 self.direction = 0
             self.move(dir_x, randrange(-80, 80))
-        
+
         # RUNNING CALCULATIONS
 
         if self.status == 'run' or self.status == 'attack':
             if self._i < self._t:
                 # UPDATE RECT AND BORDERS COLLISION CHECK:
-                self.rect.center = (min(max(round(self._start[0] + (self._end[0] - self._start[0]) * self._i / self._t), 0), map_rect.width),
-                                    min(max(round(self._start[1] + (self._end[1] - self._start[1]) * self._i / self._t), 0), map_rect.height))
+                self.rect.center = (
+                    min(max(round(self._start[0] + (self._end[0] - self._start[0]) * self._i / self._t), 0),
+                        map_rect.width),
+                    min(max(round(self._start[1] + (self._end[1] - self._start[1]) * self._i / self._t), 0),
+                        map_rect.height))
                 self._i += 1
 
             else:
@@ -186,7 +88,7 @@ class Entity(pg.sprite.Sprite):
                 self._t = 0
                 if self.status == 'run':  # IF RUNNING (NOT ATTACKING) HAS ENDED, CHANGE BACK TO IDLE
                     self.change_status('idle')
-            
+
         if self.animation_tick % self.anim_speed == 0:
             self.animation.update()
 
@@ -195,7 +97,7 @@ class Entity(pg.sprite.Sprite):
 
         if self.direction:
             self.image = pg.transform.flip(self.image, True, False)
-            
+
         if self.status == 'attack':
             # CHECK IF ATTACK IS FINISHED:
             if self.animation.surface_index == len(self.animation.surfaces) - 1:
@@ -218,7 +120,7 @@ class Entity(pg.sprite.Sprite):
         pg.draw.line(screen, (255, 0, 0),
                      (camera.apply(self).topleft[0], camera.apply(self).topleft[1] - 20),
                      (camera.apply(self).topleft[0] + self.health, camera.apply(self).topleft[1] - 20))
-    
+
     def melee_attack(self):
         if self.status == "attack":  # CHECK IF ALREADY ATTACKING
             return
@@ -231,6 +133,157 @@ class Entity(pg.sprite.Sprite):
         self.remove(self.groups[0], self.groups[1])
 
 
+class Item(pg.sprite.Sprite):
+    """" ITEM CLASS, GETS ITEM TYPE, OWNER (ENTITY)"""
+
+    def __init__(self, item_type, owner):
+        self.group = owner.items
+        pg.sprite.Sprite.__init__(self, self.group)
+        self.item_type = item_type
+        self.owner = owner
+        self.image = pg.image.load('graphics/items/' + item_type + ".png")
+        self.rect = self.image.get_rect()
+        self.duration = 0  # duration of item's effect to last
+
+    def use_item(self):
+        """" USES ITEM. FOR EACH ITEM EXISTS A SPECIAL EFFECT AND DURATION"""
+        if self.item_type == 'strength_pot':
+            self.owner.attack_dmg += 10
+            self.duration = 1000
+        elif self.item_type == 'heal_pot':
+            if self.owner.health < 80:
+                self.owner.health += 20
+            else:
+                self.owner.health = 100
+            self.remove(self.group)  # HEAL POT IS INSTANT. REMOVE FROM GROUP
+        elif self.item_type == 'speed_pot':
+            self.owner.walk_speed += 3
+            self.duration = 1000
+        elif self.item_type == 'useless_card':
+            return
+        else:
+            self.owner.health = 100
+
+    def update(self):
+        # DECREASE DURATION IN EACH TICK
+        self.duration -= 1
+
+        # CHECK IF DURATION ENDED:
+        if self.duration == 0:
+
+            # RESET EFFECT AND REMOVE FROM ITEM GROUP:
+            if self.item_type == 'strength_pot':
+                self.owner.attack_dmg -= 10
+                self.duration = 100
+            elif self.item_type == 'speed_pot':
+                self.owner.walk_speed -= 3
+                self.duration = 100
+            self.remove(self.group)
+
+
+class Inventory:
+    def __init__(self):
+        self.slots = []
+        for i in range(0, 15):
+            self.slots.append(0)
+        self.image = pg.image.load("Graphics/Inventory.png")
+        self.rect = self.image.get_rect()
+        self.rect.topleft = (240, 640)
+        self.slot_img = pg.image.load("Graphics/cur_slot.png")
+        self.cur_slot = 0  # current slot
+        self.font = pg.font.Font(pg.font.get_default_font(), 25)
+
+    def render(self, screen):
+        # DRAW INVENTORY:
+        screen.blit(self.image, self.rect)
+
+        # DRAW SLOTS AND ITEMS:
+        for i in range(0, 15):
+            text = self.font.render(str(i + 1), True, (0, 0, 0))
+            screen.blit(text, (self.rect.midleft[0] + i * 40, self.rect.midleft[1]))  # NUM
+
+            # CHECK IF SLOT IS EMPTY:
+            if self.slots[i] == 0:
+                continue
+
+            # DRAW ITEM:
+            screen.blit(self.slots[i].image, (self.rect.topleft[0] + i * 40, self.rect.topleft[1]))
+
+        # DRAW OUTLINE AROUND CURRENT SLOT:
+        screen.blit(self.slot_img, (self.rect.topleft[0] + self.cur_slot * 40, self.rect.topleft[1]))
+
+    def add_item(self, item: Item):
+        """" ADD ITEM TO FIRST EMPTY SLOT"""
+        for i in range(0, 15):
+            if self.slots[i] == 0:
+                self.slots[i] = item
+                return
+        print("INVENTORY FULL")
+
+    def remove_item(self, slot: int):
+        """" REMOVE ITEM FROM INVENTORY BY SLOT NUMBER"""
+        if self.slots[slot] != 0:
+            self.slots[slot] = 0
+            return
+        else:
+            print("SLOT EMPTY")
+
+
+class Projectile(pg.sprite.Sprite):
+    """" PROJECTILE CLASS. GETS TYPE OF PROJECTILE, ATTACKER (PLAYER/MOB), TARGET VECTOR, ALL_SPRITE_GROUPS
+         TARGET VECTOR IS SCREEN VECTOR FROM PLAYER TO MOUSE """
+
+    def __init__(self, proj_type, attacker: Entity, vect: pg.math.Vector2, all_sprite_groups):
+        self.groups = all_sprite_groups
+        pg.sprite.Sprite.__init__(self, self.groups[0], self.groups[2])
+        # self.groups[0]: all sprites, self.groups[2]: projectile sprites
+
+        self._start = attacker.rect.center
+        self.attacker = attacker
+        self.image = pg.image.load('graphics/projectiles/' + proj_type + ".png")
+        self.rect = self.image.get_rect(topleft=self._start)
+        self.angle = vect.as_polar()[1]  # VECTOR ANGLE
+
+        # CHECK EACH TYPE:
+        if proj_type == 'arrow':
+            self._speed = 10
+            self.damage = 20
+            self.image = pg.transform.rotate(self.image, 230 + self.angle)  # ROTATE SO IT'S FACING IN ITS DIRECTION
+        elif proj_type == 'axe':
+            self._speed = 10
+            self.damage = 20
+            self.image = pg.transform.rotate(self.image, 310 + self.angle)
+        else:
+            self.image = pg.transform.rotate(self.image, self.angle)
+            self._speed = 10
+            self.damage = 20
+
+        # X,Y AXIS SPEEDS:
+        self._speed_x = (vect.x / vect.length()) * self._speed
+        self._speed_y = - (vect.y / vect.length()) * self._speed
+
+        self._i = 0  # ITERATION
+
+    def update(self, map_rect):
+        """" UPDATES PROJECTILE: RECT POS, BORDER AND ENTITY COLLISIONS"""
+
+        # UPDATE POS WITH EACH AXIS SPEED BY ITERATION:
+        self._i += 1
+        self.rect.center = self._start[0] + (self._speed_x * self._i), self._start[1] + (self._speed_y * self._i)
+        # CHECK BORDERS:
+        if self.rect.centerx > map_rect.width or self.rect.centerx < 0 or self.rect.centery > map_rect.height or self.rect.centery < 0:
+            self.remove(self.groups[0], self.groups[2])
+
+        # CHECK COLLISION WITH ENTITIES:
+        for sprite in self.groups[1]:  # groups[1] - all entities (players/mobs)
+            if sprite is not self.attacker and pg.sprite.collide_rect(self, sprite):
+                sprite.health -= self.damage
+                self.remove(self.groups[0], self.groups[2])
+
+    def draw(self, screen, camera):
+        screen.blit(self.image, camera.apply(self))
+
+
 def update_dir(player: Entity, camera):
     """ UPDATES PLAYER DIRECTION ACCORDING TO
     MOUSE POS (0 = RIGHT, 1 = LEFT) """
@@ -241,63 +294,73 @@ def update_dir(player: Entity, camera):
         player.direction = 1
 
 
-def handle_keyboard(player, camera, key):
+def handle_keyboard(player, inv, camera, key):
     if key == 120:  # X KEY
         update_dir(player, camera)
         player.melee_attack()
 
     elif key == 122:  # Z key
         # GET VECTOR FOR PROJECTILE:
-        vect = pg.math.Vector2(pg.mouse.get_pos()[0] - WIDTH // 2,  HEIGHT // 2 - pg.mouse.get_pos()[1])
+        vect = pg.math.Vector2(pg.mouse.get_pos()[0] - WIDTH // 2, HEIGHT // 2 - pg.mouse.get_pos()[1])
         axe = Projectile("axe", player, vect, player.groups)
         update_dir(player, camera)
 
     elif key == 99:  # C KEY
         # GET VECTOR FOR PROJECTILE:
-        vect = pg.math.Vector2(pg.mouse.get_pos()[0] - WIDTH // 2,  HEIGHT // 2 - pg.mouse.get_pos()[1])
+        vect = pg.math.Vector2(pg.mouse.get_pos()[0] - WIDTH // 2, HEIGHT // 2 - pg.mouse.get_pos()[1])
         arrow = Projectile("arrow", player, vect, player.groups)
         update_dir(player, camera)
 
-    # POTIONS (FOR TESTING)
-    elif key == 112:  # P KEY
-        print("INCREASING SPEED")
-        speed_pot = Item("speed_pot", player)
-        player.items.add(speed_pot)
-        speed_pot.use_item()
-
-    elif key == 111:  # O KEY
-        print("INCREASING ATTACK MELEE DAMAGE")
-        strength_pot = Item("strength_pot", player)
-        player.items.add(strength_pot)
-        strength_pot.use_item()
+    elif key == 114:  # R KEY
+        item = inv.slots[inv.cur_slot]
+        # CHECK IF EMPTY SLOT
+        if item != 0:
+            # USE ITEM:
+            item.use_item()
+            inv.remove_item(inv.cur_slot)
 
 
-def events(player, camera):
+def handle_mouse(player, event, inv, camera):
+    # CHECK LEFT CLICK:
+    if event.button == 1:
+        # UPDATE DIRECTION:
+        update_dir(player, camera)
+
+        # MOVE THE PLAYER ACCORDING TO MOUSE POS
+        mouse = pg.mouse.get_pos()
+        player.move(mouse[0] - camera.apply(player).topleft[0],
+                    mouse[1] - camera.apply(player).topleft[1])
+        return
+
+    # CHECK MOUSE SCROLL WHEEL:
+    if event.button > 3:
+        if event.button % 2 == 0 and inv.cur_slot < 14:  # SCROLL UP
+            inv.cur_slot += 1
+        else:  # SCROLL DOWN
+            if inv.cur_slot > 0:
+                inv.cur_slot -= 1
+        return
+
+
+def events(player, inv, camera):
     for event in pg.event.get():
         if event.type == pg.QUIT:
             return False
         if event.type == pg.KEYDOWN:
-            handle_keyboard(player, camera, event.key)
+            handle_keyboard(player, inv, camera, event.key)
         if event.type == pg.MOUSEBUTTONDOWN:
-            # UPDATE DIRECTION:
-            update_dir(player, camera)
-
-            # MOVE THE PLAYER ACCORDING TO MOUSE POS
-            mouse = pg.mouse.get_pos()
-            player.move(mouse[0] - camera.apply(player).topleft[0],
-                        mouse[1] - camera.apply(player).topleft[1])
+            handle_mouse(player, event, inv, camera)
     return True
 
 
 def update(all_sprites, player, camera, map_rect):
-
     for sprite in all_sprites:
         sprite.update(map_rect)
 
     camera.update(player)
 
 
-def draw(screen, all_sprites, map_img, map_rect, camera):
+def draw(screen, all_sprites, map_img, map_rect, inv, camera):
     screen.fill(BGCOLOR)
 
     screen.blit(map_img, camera.apply_rect(map_rect))
@@ -305,14 +368,15 @@ def draw(screen, all_sprites, map_img, map_rect, camera):
     for sprite in all_sprites:
         screen.blit(sprite.image, camera.apply(sprite))
         sprite.draw(screen, camera)
-
+    inv.render(screen)  # RENDER INVENTORY
     pg.display.update()
 
 
 def create_enemies(all_sprites, mob_anims):
     mobs = []
     for i in range(0, 100):
-        mobs.append(Entity((randint(0, 12000), randint(0, 7600)), all_sprites, choice(mob_anims), 2, 15, auto_move=True))
+        mobs.append(
+            Entity((randint(0, 12000), randint(0, 7600)), all_sprites, choice(mob_anims), 2, 15, auto_move=True))
 
 
 def run():
@@ -323,7 +387,7 @@ def run():
     entity_sprites = pg.sprite.Group()
     projectile_sprites = pg.sprite.Group()
     all_sprite_groups = [all_sprites, entity_sprites, projectile_sprites]
-    
+
     player_anims = {
         'idle': AnimatedSprite('graphics/Knight/KnightIdle_strip.png', 15, True),
         'run': AnimatedSprite('graphics/Knight/KnightRun_strip.png', 8, True),
@@ -342,6 +406,16 @@ def run():
     mob = Entity((1600, 1390), all_sprite_groups, choice(mob_anims), 2, 15, auto_move=True)
     create_enemies(all_sprite_groups, mob_anims)
 
+    player2 = Entity((1200, 1300), all_sprite_groups, player_anims, 5, 5)
+    print(player2.id)
+    player2.move(100, 100)
+    # SETTING UP CLIENT
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.bind((IP, PORT))
+    game_client = client.Client(sock=sock, server=(SERVER_IP, SERVER_PORT))
+    threading.Thread(target=game_client.receive_updates, args=(entity_sprites,)).start()
+
     # SETTING UP MAP
 
     map_folder = 'maps'
@@ -351,15 +425,44 @@ def run():
     map_rect = map_img.get_rect()
 
     # SETTING UP CAMERA
-    
+
     camera = Camera(tiled_map.width, tiled_map.height)
     pg.mouse.set_cursor(pg.cursors.broken_x)
 
     running = True
+    inv = Inventory()
+
+    # ITEMS:
+    speed_pot = Item("speed_pot", player)
+    strength_pot = Item("strength_pot", player)
+    heal_pot = Item("heal_pot", player)
+    useless_card = Item("useless_card", player)
+
+    # RANDOM INVENTORY FOR TESTING
+    player.items.add(strength_pot)
+    inv.add_item(strength_pot)
+    player.items.add(strength_pot)
+    inv.add_item(strength_pot)
+    player.items.add(strength_pot)
+    inv.add_item(strength_pot)
+    player.items.add(strength_pot)
+    inv.add_item(strength_pot)
+    player.items.add(heal_pot)
+    inv.add_item(heal_pot)
+    player.items.add(speed_pot)
+    inv.add_item(speed_pot)
+
+    player.items.add(speed_pot)
+    inv.add_item(speed_pot)
+
+    player.items.add(speed_pot)
+    inv.add_item(speed_pot)
+
+    player.health = 50
     while running:
-        running = events(player, camera)
+        running = events(player, inv, camera)
         update(all_sprite_groups[0], player, camera, map_rect)  # all_sprite_groups[0] : all_sprites
-        draw(screen, all_sprite_groups[0], map_img, map_rect, camera)
+        draw(screen, all_sprite_groups[0], map_img, map_rect, inv, camera)
         clock.tick(FPS)
 
     pg.quit()
