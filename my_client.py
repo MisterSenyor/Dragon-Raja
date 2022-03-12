@@ -13,15 +13,13 @@ def main():
     data = json.loads(data.decode())
     id = data["id"]
     print("received: {}".format(data))
-    msg = {'cmd': 'mov', 'id': id, 'pos': [12, 14]}
+    msg = {'cmd': 'disconnect'}
     print("sending: {}".format(msg))
     data = json.dumps(msg).encode()
     my_scoket.sendto(data, settings.SERVER_ADDRESS)
     data, address = my_scoket.recvfrom(settings.HEADER_SIZE)
     data = json.loads(data.decode())
     print("received: {}".format(data))
-
-    my_scoket.close()
 
 
 if __name__ == '__main__':

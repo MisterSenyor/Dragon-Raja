@@ -15,27 +15,44 @@ class server:
         self.clientsAmount = 0
         self.address = (self.ip, settings.SERVER_PORT)
 
-    def add(self, address):
+    def add(self, address, game_state):
         self.clients.append(address)
-        data = json.dumps({'cmd': 'new', 'id': self.clientsAmount})
+        data = json.dumps({'cmd': 'new', 'id': self.clientsAmount, 'entitles': game_state})
         self.clientsAmount += 1
         self.socket.sendto(data.encode(), address)
 
+    def remove(self, address):
+        self.clients.remove(address)
+        print("Client {} disconnected".format(address))
+        self.clientsAmount -= 1
+
     def send_data(self, data):
         for i in self.clients:
-            self.socket.sendto(data, i)
+            try:
+                self.socket.sendto(data, i)
+            except Exception:
+                print("Cant send to: {}".format(i))
 
     def receive_packets(self, arr):
         while True:
-            (msg, client_address) = self.socket.recvfrom(settings.HEADER_SIZE)
-            print("received packet. address: {}".format(client_address))
-            data = json.loads(msg.decode())
-            print("data: {}".format(data))
-            if client_address not in self.clients and "cmd" in data and data["cmd"] == "new":
-                self.add(client_address)
-            else:
-                arr.append(data)
-                print(arr)
+            try:
+                (msg, client_address) = self.socket.recvfrom(settings.HEADER_SIZE)
+                print("received packet. address: {}".format(client_address))
+                try:
+                    data = json.loads(msg.decode())
+                except Exception:
+                    data = "Cant load data"
+                print("data: {}".format(data))
+                if client_address not in self.clients and "cmd" in data and data["cmd"] == "new":
+                    self.add(client_address, arr)
+                elif "cmd" in data and data["cmd"] == "disconnect":
+                    self.remove(client_address)
+                else:
+                    arr.append(data)
+                    print(arr)
+            except Exception:
+                continue
+                print("Cant receive")
 
     def handle_updates(self, arr):
         pass
