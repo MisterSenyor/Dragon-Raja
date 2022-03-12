@@ -42,8 +42,8 @@ class server:
 
     def send_updates(self, arr):
         data = json.dumps(arr).encode()
-        self.send_data(data)
         arr.clear()
+        self.send_data(data)
 
 
 def main():
@@ -54,9 +54,10 @@ def main():
     handling_thread = threading.Thread(target=server_scoket.handle_updates, args=(arr,))
     receive_thread.start()
     handling_thread.start()
-    #while True:
-        #time.sleep(settings.UPDATE_TICK)
-        #server_scoket.send_updates(arr)
+    while True:
+        time.sleep(settings.UPDATE_TICK)
+        server_scoket.send_updates(arr)
+
 
 if __name__ == '__main__':
     main()
