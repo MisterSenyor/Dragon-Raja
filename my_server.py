@@ -10,7 +10,6 @@ class server:
     def __init__(self):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.ip = socket.gethostbyname(socket.gethostname())
-        self.socket.bind(settings.SERVER_ADDRESS)
         print("Server ip: {}".format(self.ip))
         self.clients = []
         self.clientsAmount = 0
@@ -30,35 +29,34 @@ class server:
         while True:
             (msg, client_address) = self.socket.recvfrom(settings.HEADER_SIZE)
             print("received packet. address: {}".format(client_address))
-            if client_address not in self.clients:
+            data = json.loads(msg.decode())
+            print("data: {}".format(data))
+            if client_address not in self.clients and "cmd" in data and data["cmd"] == "new":
                 self.add(client_address)
-            try:
-                data = json.loads(msg.decode())
-                print("data: {}".format(data))
+            else:
                 arr.append(data)
-            except Exception:
-                continue
+                print(arr)
 
     def handle_updates(self, arr):
         pass
 
     def send_updates(self, arr):
-        data = json.dumps(arr).zfill(settings.HEADER_SIZE).encode()
+        data = json.dumps(arr).encode()
         self.send_data(data)
         arr.clear()
 
 
 def main():
     server_scoket = server()
+    server_scoket.socket.bind(settings.SERVER_ADDRESS)
     arr = []
     receive_thread = threading.Thread(target=server_scoket.receive_packets, args=(arr,))
     handling_thread = threading.Thread(target=server_scoket.handle_updates, args=(arr,))
     receive_thread.start()
     handling_thread.start()
-    while True:
-        time.sleep(settings.UPDATE_TICK)
-        server_scoket.send_updates(arr)
-
+    #while True:
+        #time.sleep(settings.UPDATE_TICK)
+        #server_scoket.send_updates(arr)
 
 if __name__ == '__main__':
     main()
