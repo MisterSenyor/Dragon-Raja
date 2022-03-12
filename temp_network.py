@@ -1,21 +1,28 @@
+import json
 import socket
+from settings import *
 
 
 class Network:
     def __init__(self):
         self.client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.IP = socket.gethostbyname(socket.gethostname())
-        self.port = 1337
-        self.HEADER_SIZE = 32
-        self.ENCODING = 'utf-8'
+        self.IP = SERVER_IP
+        self.port = SERVER_PORT
+        self.HEADER_SIZE = HEADER_SIZE
+        self.ENCODING = ENCODING
         self.addr = (self.IP, self.port)
         self.pos = ((1400, 1360))
         self.id = self.connect()
 
+    def serialize_cmd(seld, data):
+        data = json.dumps(data)
+        return data
 
     def connect(self):
-        pass
-
+        data = {"cmd": "connect", "id": 0}
+        data = self.serialize_cmd(data)
+        id = self.send(data)
+        return id
     def send(self, data):
         try:
             self.client.sendto(str.encode(data), self.addr)
@@ -29,12 +36,9 @@ class Network:
 def main():
     n2 = Network()
     n = Network()
-    print(n.send((1399, 1360)))
-    print(n.send((1398, 1360)))
-    print(n.send((1397, 1360)))
-    print(n.send((1396, 1360)))
-    print(n.send((1395, 1360)))
-    print(n2.send((2001, 1360)))
+    print(n2.id)
+    print(n.id)
+    n.send(n.serialize_cmd({"cmd": "attack", "id": n.id}))
 
 
 

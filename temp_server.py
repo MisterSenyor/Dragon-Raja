@@ -34,7 +34,7 @@ class UDPServer:
             if cmd == "connect":
                 self.new_client(addr)
 
-            player = self.curr_client(params["id"])
+            ##player = self.curr_client(params["id"])
 
             print("Received: ", cmd)
             self.updates_queue.put({"update": cmd, **params})
@@ -67,7 +67,9 @@ class UDPServer:
         """
 
         try:
-            cmd, json_data = data.decode().split(maxsplit=1)
+            data = data.decode()
+            cmd = json.loads(data)["cmd"]
+            json_data = "{" + data.split(",", 1)[1]
             return cmd, json.loads(json_data)
         except Exception:
             logging.exception(f'exception while parsing cmd: {data}')
