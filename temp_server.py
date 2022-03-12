@@ -76,8 +76,9 @@ class UDPServer:
             return '', {}
 
     def new_client(self, addr):
+        data = json.dumps({'cmd': 'connect', 'id': self.currentPlayer})
+        self.sock.sendto(data.encode(), addr)
         self.currentPlayer += 1
-        self.sock.sendto(str(self.currentPlayer).encode(), addr)
         self.Addresses.append(addr)
 
     def curr_client(self, id):

@@ -23,14 +23,19 @@ class Network:
         data = self.serialize_cmd(data)
         id = self.send(data)
         return id
+
     def send(self, data):
         try:
             self.client.sendto(str.encode(data), self.addr)
             (data, addr) = self.client.recvfrom(self.HEADER_SIZE)
-            return data.decode()
+            return self.parse_cmd(data)
         except socket.error as e:
             print(e)
+            return 0
 
+    def parse_cmd(self, data):
+        data = data.decode()
+        return json.loads(data)["id"]
 
 
 def main():
