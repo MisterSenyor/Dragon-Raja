@@ -406,9 +406,6 @@ def run():
     mob = Entity((1600, 1390), all_sprite_groups, choice(mob_anims), 2, 15, auto_move=True)
     create_enemies(all_sprite_groups, mob_anims)
 
-    player2 = Entity((1200, 1300), all_sprite_groups, player_anims, 5, 5)
-    print(player2.id)
-    player2.move(100, 100)
     # SETTING UP CLIENT
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
