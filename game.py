@@ -11,11 +11,11 @@ pg.init()
 
 
 class Entity(pg.sprite.Sprite):
-    def __init__(self, pos, sprite_groups, animations, walk_speed, anim_speed, auto_move=False):
+    def __init__(self, pos, sprite_groups, animations, walk_speed, anim_speed, auto_move=False, id_: int = None):
         self.groups = sprite_groups
         pg.sprite.Sprite.__init__(self, self.groups[0], self.groups[1])
         # self.groups[0]: all sprites, self.groups[1]: entity sprites
-        self.id = random.randint(0, 1000000)
+        self.id = id_ if id_ is not None else random.randint(0, 1000000)
         self.items = pg.sprite.Group()
         self.walk_speed = walk_speed
         self.anim_speed = anim_speed
@@ -413,8 +413,9 @@ def run():
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind((IP, PORT))
-    game_client = client.Client(sock=sock, server=(SERVER_IP, SERVER_PORT))
-    threading.Thread(target=game_client.receive_updates, args=(all_sprite_groups,)).start()
+    game_client = client.Client(sock=sock, server=(SERVER_IP, SERVER_PORT), all_sprite_groups=all_sprite_groups,
+                                player_animations=player_anims, player_anim_speed=5)
+    threading.Thread(target=game_client.receive_updates).start()
 
     # SETTING UP MAP
 

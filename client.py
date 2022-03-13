@@ -9,30 +9,39 @@ from settings import *
 
 
 class Client:
-    def __init__(self, sock: socket.socket, server: Address):
+    def __init__(self, sock: socket.socket, server: Address, all_sprite_groups, player_animations, player_anim_speed):
         self.sock = sock
         self.server = server
+        self.all_sprite_groups = all_sprite_groups
+        self.player_animations = player_animations
+        self.player_anim_speed = player_anim_speed
 
     def send_update(self, cmd: str, params: dict):
         self.sock.sendto(json.dumps({'cmd': cmd, **params}).encode(), self.server)
 
-    def handle_update(self, update: dict, all_sprite_groups):
-        entity_sprites, projectile_sprites = all_sprite_groups[1:]
+    def handle_update(self, update: dict):
+        entity_sprites, projectile_sprites = self.all_sprite_groups[1:]
         cmd = update['cmd']
-        ids = [entity.id for entity in entity_sprites.sprites()]
-        entity = entity_sprites.sprites()[ids.index(update['id'])]
 
-        if cmd == 'move':
-            print('moving to pos:', update['pos'])
-            entity.move(*update['pos'])
-        elif cmd == 'attack':
-            # check collision with mob_ids
-            entity.melee_attack()
-        elif cmd == 'projectile':
-            game.Projectile(proj_type=update['type'], attacker=entity, all_sprite_groups=all_sprite_groups,
-                            vect=pygame.Vector2(update['target']))
+        if cmd == 'new':
+            game.Entity(pos=update['pos'], sprite_groups=self.all_sprite_groups, animations=self.player_animations,
+                        walk_speed=update['walk_speed'], anim_speed=self.player_anim_speed, id_=update['id'])
+            print(self.all_sprite_groups)
+        else:
+            ids = [entity.id for entity in entity_sprites.sprites()]
+            entity = entity_sprites.sprites()[ids.index(update['id'])]
 
-    def receive_updates(self, all_sprite_groups):
+            if cmd == 'move':
+                print('moving to pos:', update['pos'])
+                entity.move(*update['pos'])
+            elif cmd == 'attack':
+                # check collision with mob_ids
+                entity.melee_attack()
+            elif cmd == 'projectile':
+                game.Projectile(proj_type=update['type'], attacker=entity, all_sprite_groups=self.all_sprite_groups,
+                                vect=pygame.Vector2(update['target']))
+
+    def receive_updates(self):
         while True:
             msg, address = self.sock.recvfrom(1024)
             print(msg, address)
@@ -43,7 +52,7 @@ class Client:
                     if cmd == 'update':
                         updates = data['updates']
                         for update in updates:
-                            self.handle_update(update, all_sprite_groups)
+                            self.handle_update(update)
                 except Exception:
                     logging.exception('exception while handling update')
 
