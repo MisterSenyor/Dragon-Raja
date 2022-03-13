@@ -136,7 +136,8 @@ class Entity(pg.sprite.Sprite):
 class Item(pg.sprite.Sprite):
     """" ITEM CLASS, GETS ITEM TYPE, OWNER (ENTITY)"""
 
-    def __init__(self, item_type, owner):
+    def __init__(self, item_type, owner, id_: int = None):
+        self.id = id_ if id_ is not None else random.randint(0, 1234567)
         self.group = owner.items
         pg.sprite.Sprite.__init__(self, self.group)
         self.item_type = item_type
