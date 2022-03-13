@@ -1,5 +1,6 @@
 import json
 import logging
+from typing import Sequence
 
 import pygame
 
@@ -9,7 +10,8 @@ from settings import *
 
 
 class Client:
-    def __init__(self, sock: socket.socket, server: Address, all_sprite_groups, player_animations, player_anim_speed):
+    def __init__(self, sock: socket.socket, server: Address, all_sprite_groups: Sequence[pygame.sprite.Group],
+                 player_animations, player_anim_speed):
         self.sock = sock
         self.server = server
         self.all_sprite_groups = all_sprite_groups
@@ -24,22 +26,24 @@ class Client:
         cmd = update['cmd']
 
         if cmd == 'new':
-            game.Entity(pos=update['pos'], sprite_groups=self.all_sprite_groups, animations=self.player_animations,
-                        walk_speed=update['walk_speed'], anim_speed=self.player_anim_speed, id_=update['id'])
-            print(self.all_sprite_groups)
+            entity = update['entity']
+            game.Entity(pos=entity['pos'], sprite_groups=self.all_sprite_groups, animations=self.player_animations,
+                        walk_speed=entity['walk_speed'], anim_speed=self.player_anim_speed, id_=entity['id'])
         else:
             ids = [entity.id for entity in entity_sprites.sprites()]
             entity = entity_sprites.sprites()[ids.index(update['id'])]
 
             if cmd == 'move':
-                print('moving to pos:', update['pos'])
                 entity.move(*update['pos'])
             elif cmd == 'attack':
                 # check collision with mob_ids
                 entity.melee_attack()
             elif cmd == 'projectile':
-                game.Projectile(proj_type=update['type'], attacker=entity, all_sprite_groups=self.all_sprite_groups,
-                                vect=pygame.Vector2(update['target']))
+                projectile = update['projectile']
+                game.Projectile(proj_type=projectile['type'], attacker=entity, all_sprite_groups=self.all_sprite_groups,
+                                vect=pygame.Vector2(projectile['target']))
+            elif cmd == 'disconnect':
+                entity.kill()
 
     def receive_updates(self):
         while True:
