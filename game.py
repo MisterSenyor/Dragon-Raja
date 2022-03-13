@@ -414,7 +414,7 @@ def run():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind((IP, PORT))
     game_client = client.Client(sock=sock, server=(SERVER_IP, SERVER_PORT))
-    threading.Thread(target=game_client.receive_updates, args=(entity_sprites,)).start()
+    threading.Thread(target=game_client.receive_updates, args=(all_sprite_groups,)).start()
 
     # SETTING UP MAP
 
