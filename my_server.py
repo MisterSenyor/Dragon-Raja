@@ -4,6 +4,7 @@ import threading
 import socket
 import settings
 import time
+import game
 
 
 class server:
@@ -17,12 +18,14 @@ class server:
 
     def add(self, address, game_state):
         self.clients.append(address)
-        data = json.dumps({'cmd': 'new', 'id': self.clientsAmount, 'entitles': game_state})
+        data = json.dumps({'cmd': 'new', 'id': self.clientsAmount, 'entity': game_state, 'projectiles': []})
         self.clientsAmount += 1
         self.socket.sendto(data.encode(), address)
 
     def remove(self, address):
         self.clients.remove(address)
+        data = json.dumps({'cmd': 'disconnect'}).encode()
+        self.socket.sendto(data, address)
         print("Client {} disconnected".format(address))
         self.clientsAmount -= 1
 
@@ -58,7 +61,8 @@ class server:
         pass
 
     def send_updates(self, arr):
-        data = json.dumps(arr).encode()
+        msg = {'cmd': 'update', 'updates': arr}
+        data = json.dumps(msg).encode()
         arr.clear()
         self.send_data(data)
 
