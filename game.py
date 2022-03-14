@@ -36,7 +36,7 @@ class Entity(pg.sprite.Sprite):
         self.animation_tick = 0
         self.health = 100
 
-    def move(self, x, y):
+    def move(self, x, y, send_update=True):
         if self.status != 'attack':
             self.change_status('run')  # CHANGE STATUS TO RUN UNLESS ATTACKING
         self._start = self.rect.center
@@ -121,7 +121,7 @@ class Entity(pg.sprite.Sprite):
                      (camera.apply(self).topleft[0], camera.apply(self).topleft[1] - 20),
                      (camera.apply(self).topleft[0] + self.health, camera.apply(self).topleft[1] - 20))
 
-    def melee_attack(self):
+    def melee_attack(self, send_update=True):
         if self.status == "attack":  # CHECK IF ALREADY ATTACKING
             return
         self._has_hit = 0  # CHANGE TO HASN'T HIT ALREADY
@@ -138,13 +138,15 @@ class MainPlayer(Entity):
         super(MainPlayer, self).__init__(*args, **kwargs)
         self.client = sock_client
 
-    def move(self, x, y):
+    def move(self, x, y, send_update=True):
         super(MainPlayer, self).move(x, y)
-        self.client.send_update('move', {'id': self.id, 'pos': [x, y]})
+        if send_update:
+            self.client.send_update('move', {'id': self.id, 'pos': [x, y]})
 
-    def melee_attack(self):
+    def melee_attack(self, send_update=True):
         super(MainPlayer, self).melee_attack()
-        self.client.send_update('attack', {'id': self.id})
+        if send_update:
+            self.client.send_update('attack', {'id': self.id})
 
 
 class Item(pg.sprite.Sprite):
@@ -160,7 +162,7 @@ class Item(pg.sprite.Sprite):
         self.rect = self.image.get_rect()
         self.duration = 0  # duration of item's effect to last
 
-    def use_item(self):
+    def use_item(self, send_update=True):
         """" USES ITEM. FOR EACH ITEM EXISTS A SPECIAL EFFECT AND DURATION"""
         if self.item_type == 'strength_pot':
             self.owner.attack_dmg += 10
@@ -178,7 +180,7 @@ class Item(pg.sprite.Sprite):
             return
         else:
             self.owner.health = 100
-        if isinstance(self.owner, MainPlayer):
+        if isinstance(self.owner, MainPlayer) and send_update:
             self.owner.client.send_update('use_item', {'id': self.owner.id, 'item_id': self.id})
 
     def update(self):
@@ -250,7 +252,7 @@ class Projectile(pg.sprite.Sprite):
     """" PROJECTILE CLASS. GETS TYPE OF PROJECTILE, ATTACKER (PLAYER/MOB), TARGET VECTOR, ALL_SPRITE_GROUPS
          TARGET VECTOR IS SCREEN VECTOR FROM PLAYER TO MOUSE """
 
-    def __init__(self, proj_type, attacker: Entity, vect: pg.math.Vector2, all_sprite_groups):
+    def __init__(self, proj_type, attacker: Entity, vect: pg.math.Vector2, all_sprite_groups, send_update=True):
         self.groups = all_sprite_groups
         pg.sprite.Sprite.__init__(self, self.groups[0], self.groups[2])
         # self.groups[0]: all sprites, self.groups[2]: projectile sprites
@@ -284,7 +286,7 @@ class Projectile(pg.sprite.Sprite):
         self._i = 0  # ITERATION
 
         # send update to server
-        if isinstance(self.attacker, MainPlayer):
+        if isinstance(self.attacker, MainPlayer) and send_update:
             self.attacker.client.send_update(
                 'projectile',
                 {'id': self.attacker.id, 'projectile': {'target': list(self.target), 'type': self.proj_type}})
@@ -480,6 +482,10 @@ def run():
 
     player.items.add(speed_pot)
     inv.add_item(speed_pot)
+
+    sock_client.send_update('connect', {
+        'entity': {'id': player.id, 'pos': player.rect.topleft, 'walk_speed': player.walk_speed,
+                   'items': [{'id': item.id, 'type': item.item_type} for item in player.items]}})
 
     player.health = 50
     while running:

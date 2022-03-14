@@ -24,30 +24,32 @@ class Client:
     def handle_update(self, update: dict):
         entity_sprites, projectile_sprites = self.all_sprite_groups[1:]
         cmd = update['cmd']
+        ids = [entity.id for entity in entity_sprites.sprites()]
 
         if cmd == 'new':
             entity = update['entity']
-            e = game.Entity(pos=entity['pos'], sprite_groups=self.all_sprite_groups, animations=self.player_animations,
-                            walk_speed=entity['walk_speed'], anim_speed=self.player_anim_speed, id_=entity['id'])
-            for item in entity['items']:
-                game.Item(item_type=item['type'], owner=e, id_=item['id'])
+            if entity['id'] not in ids:
+                e = game.Entity(pos=entity['pos'], sprite_groups=self.all_sprite_groups,
+                                animations=self.player_animations,
+                                walk_speed=entity['walk_speed'], anim_speed=self.player_anim_speed, id_=entity['id'])
+                for item in entity['items']:
+                    game.Item(item_type=item['type'], owner=e, id_=item['id'])
         else:
-            ids = [entity.id for entity in entity_sprites.sprites()]
             entity = entity_sprites.sprites()[ids.index(update['id'])]
 
             if cmd == 'move':
-                entity.move(*update['pos'])
+                entity.move(*update['pos'], send_update=False)
             elif cmd == 'attack':
                 # check collision with mob_ids
-                entity.melee_attack()
+                entity.melee_attack(send_update=False)
             elif cmd == 'projectile':
                 projectile = update['projectile']
                 game.Projectile(proj_type=projectile['type'], attacker=entity, all_sprite_groups=self.all_sprite_groups,
-                                vect=pygame.Vector2(projectile['target']))
+                                vect=pygame.Vector2(projectile['target']), send_update=False)
             elif cmd == 'use_item':
                 item_ids = [item.id for item in entity.items.sprites()]
                 item = entity.items.sprites()[item_ids.index(update['item_id'])]
-                item.use_item()
+                item.use_item(send_update=False)
             elif cmd == 'disconnect':
                 entity.kill()
 
