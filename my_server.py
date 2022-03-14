@@ -22,7 +22,7 @@ class Server:
         entity = data['entity']
 
         data = json.dumps(
-            {'cmd': 'connect', 'id': entity['id'], 'entitles': list(self.entities.values()), 'projectiles': []})
+            {'cmd': 'connect', 'id': entity['id'], 'entities': list(self.entities.values()), 'projectiles': []})
         data = data.encode() + b'\n'
         self.socket.sendto(data, address)
 
