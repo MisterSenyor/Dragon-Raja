@@ -1,79 +1,85 @@
 import json
-import time
-import threading
+import logging
 import socket
-import settings
+import threading
 import time
+
+import settings
 
 
 class Server:
-    def __init__(self):
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.ip = socket.gethostbyname(socket.gethostname())
-        print("Server ip: {}".format(self.ip))
+    def __init__(self, sock: socket.socket):
+        self.socket = sock
         self.clients = []
-        self.clientsAmount = 0
-        self.address = (self.ip, settings.SERVER_PORT)
 
-    def add(self, address, game_state):
+        self.entities = {}
+        self.updates = []
+
+        logging.debug(f'server listening at: {self.socket.getsockname()}')
+
+    def connect(self, data, address):
         self.clients.append(address)
-        data = json.dumps({'cmd': 'new', 'id': self.clientsAmount, 'entitles': game_state})
-        self.clientsAmount += 1
-        self.socket.sendto(data.encode(), address)
+        entity = data['entity']
 
-    def remove(self, address):
+        data = json.dumps(
+            {'cmd': 'connect', 'id': entity['id'], 'entitles': list(self.entities.values()), 'projectiles': []})
+        data = data.encode() + b'\n'
+        self.socket.sendto(data, address)
+
+        self.entities[entity['id']] = entity
+        self.updates.append({'cmd': 'new', 'entity': entity})
+
+        logging.debug(f'new client connected: {self.clients=}, {self.entities=}')
+
+    def disconnect(self, data, address):
         self.clients.remove(address)
-        print("Client {} disconnected".format(address))
-        self.clientsAmount -= 1
+        del self.entities[data['id']]
+        self.updates.append(data)
+
+        logging.debug(f'client disconnected: {self.clients=}, {self.entities=}')
 
     def send_data(self, data):
-        for i in self.clients:
+        for addr in self.clients:
             try:
-                self.socket.sendto(data, i)
+                self.socket.sendto(data, addr)
             except Exception:
-                print("Cant send to: {}".format(i))
+                logging.exception(f"can't send data to client: {addr=}, {data=}")
 
-    def receive_packets(self, arr):
+    def receive_packets(self):
         while True:
             try:
-                (msg, client_address) = self.socket.recvfrom(settings.HEADER_SIZE)
-                print("received packet. address: {}".format(client_address))
-                try:
-                    data = json.loads(msg.decode())
-                except Exception:
-                    data = "Cant load data"
-                print("data: {}".format(data))
-                if client_address not in self.clients and "cmd" in data and data["cmd"] == "new":
-                    self.add(client_address, arr)
-                elif "cmd" in data and data["cmd"] == "disconnect":
-                    self.remove(client_address)
+                msg, address = self.socket.recvfrom(settings.HEADER_SIZE)
+                data = json.loads(msg.decode())
+
+                logging.debug(f'received data: {data=}')
+                if data["cmd"] == "connect":
+                    if address not in self.clients:
+                        self.connect(data=data, address=address)
+                elif data["cmd"] == "disconnect":
+                    self.disconnect(data=data, address=address)
                 else:
-                    arr.append(data)
-                    print(arr)
+                    self.updates.append(data)
             except Exception:
-                continue
-                print("Cant receive")
+                logging.exception('exception while handling request')
 
-    def handle_updates(self, arr):
-        pass
-
-    def send_updates(self, arr):
-        data = json.dumps(arr).encode()
-        arr.clear()
+    def send_updates(self):
+        data = json.dumps({'cmd': 'update', 'updates': self.updates}).encode() + b'\n'
+        self.updates.clear()
         self.send_data(data)
 
 
 def main():
-    server_scoket = Server()
-    server_scoket.socket.bind(settings.SERVER_ADDRESS)
-    arr = []
-    receive_thread = threading.Thread(target=server_scoket.receive_packets, args=(arr,))
-    handling_thread = threading.Thread(target=server_scoket.handle_updates, args=(arr,))
+    logging.basicConfig(level=logging.DEBUG)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.bind(settings.SERVER_ADDRESS)
+
+    server = Server(sock=sock)
+    receive_thread = threading.Thread(target=server.receive_packets)
     receive_thread.start()
-    handling_thread.start()
+
     while True:
         time.sleep(settings.UPDATE_TICK)
-        server_scoket.send_updates(arr)
+        server.send_updates()
 
 
 if __name__ == '__main__':
