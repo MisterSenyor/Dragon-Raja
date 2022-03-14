@@ -488,6 +488,8 @@ def run():
         draw(screen, all_sprite_groups[0], map_img, map_rect, inv, camera)
         clock.tick(FPS)
 
+    sock_client.send_update('disconnect', {'id': player.id})
+
     pg.quit()
 
 
