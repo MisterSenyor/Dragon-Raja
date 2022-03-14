@@ -133,6 +133,20 @@ class Entity(pg.sprite.Sprite):
         self.remove(self.groups[0], self.groups[1])
 
 
+class MainPlayer(Entity):
+    def __init__(self, sock_client: 'client.Client', *args, **kwargs):
+        super(MainPlayer, self).__init__(*args, **kwargs)
+        self.client = sock_client
+
+    def move(self, x, y):
+        super(MainPlayer, self).move(x, y)
+        self.client.send_update('move', {'id': self.id, 'pos': [x, y]})
+
+    def melee_attack(self):
+        super(MainPlayer, self).melee_attack()
+        self.client.send_update('attack', {'id': self.id})
+
+
 class Item(pg.sprite.Sprite):
     """" ITEM CLASS, GETS ITEM TYPE, OWNER (ENTITY)"""
 
@@ -164,6 +178,8 @@ class Item(pg.sprite.Sprite):
             return
         else:
             self.owner.health = 100
+        if isinstance(self.owner, MainPlayer):
+            self.owner.client.send_update('use_item', {'id': self.owner.id, 'item_id': self.id})
 
     def update(self):
         # DECREASE DURATION IN EACH TICK
@@ -244,6 +260,8 @@ class Projectile(pg.sprite.Sprite):
         self.image = pg.image.load('graphics/projectiles/' + proj_type + ".png")
         self.rect = self.image.get_rect(topleft=self._start)
         self.angle = vect.as_polar()[1]  # VECTOR ANGLE
+        self.proj_type = proj_type
+        self.target = vect
 
         # CHECK EACH TYPE:
         if proj_type == 'arrow':
@@ -264,6 +282,12 @@ class Projectile(pg.sprite.Sprite):
         self._speed_y = - (vect.y / vect.length()) * self._speed
 
         self._i = 0  # ITERATION
+
+        # send update to server
+        if isinstance(self.attacker, MainPlayer):
+            self.attacker.client.send_update(
+                'projectile',
+                {'id': self.attacker.id, 'projectile': {'target': list(self.target), 'type': self.proj_type}})
 
     def update(self, map_rect):
         """" UPDATES PROJECTILE: RECT POS, BORDER AND ENTITY COLLISIONS"""
@@ -403,17 +427,17 @@ def run():
         }
     ]
 
-    player = Entity((1400, 1360), all_sprite_groups, player_anims, 5, 5)
-    mob = Entity((1600, 1390), all_sprite_groups, choice(mob_anims), 2, 15, auto_move=True)
-    create_enemies(all_sprite_groups, mob_anims)
-
     # SETTING UP CLIENT
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind((IP, PORT))
-    game_client = client.Client(sock=sock, server=(SERVER_IP, SERVER_PORT), all_sprite_groups=all_sprite_groups,
+    sock_client = client.Client(sock=sock, server=(SERVER_IP, SERVER_PORT), all_sprite_groups=all_sprite_groups,
                                 player_animations=player_anims, player_anim_speed=5)
-    threading.Thread(target=game_client.receive_updates).start()
+    threading.Thread(target=sock_client.receive_updates).start()
+
+    player = MainPlayer(sock_client, (1400, 1360), all_sprite_groups, player_anims, 5, 5)
+    mob = Entity((1600, 1390), all_sprite_groups, choice(mob_anims), 2, 15, auto_move=True)
+    create_enemies(all_sprite_groups, mob_anims)
 
     # SETTING UP MAP
 
