@@ -19,7 +19,7 @@ class Client:
         self.player_anim_speed = player_anim_speed
 
     def send_update(self, cmd: str, params: dict):
-        self.sock.sendto(json.dumps({'cmd': cmd, **params}).encode(), self.server)
+        self.sock.sendto(json.dumps({'cmd': cmd, **params}).encode() + b'\n', self.server)
 
     def handle_update(self, update: dict):
         entity_sprites, projectile_sprites = self.all_sprite_groups[1:]
