@@ -2,7 +2,7 @@ import random
 import threading
 from os import path
 from random import randint, randrange, choice
-
+import sys
 import client
 from Tilemap import *
 from animated_sprite import AnimatedSprite
@@ -289,7 +289,7 @@ class Projectile(pg.sprite.Sprite):
         if isinstance(self.attacker, MainPlayer) and send_update:
             self.attacker.client.send_update(
                 'projectile',
-                {'id': self.attacker.id, 'projectile': {'target': list(self.target), 'type': self.proj_type}})
+                {'projectile': {'target': list(self.target), 'type': self.proj_type, 'attacker_id': self.attacker.id}})
 
     def update(self, map_rect):
         """" UPDATES PROJECTILE: RECT POS, BORDER AND ENTITY COLLISIONS"""
@@ -432,7 +432,8 @@ def run():
     # SETTING UP CLIENT
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.bind((IP, PORT))
+    port = PORT if len(sys.argv) == 1 else int(sys.argv[1])
+    sock.bind((IP, port))
     sock_client = client.Client(sock=sock, server=(SERVER_IP, SERVER_PORT), all_sprite_groups=all_sprite_groups,
                                 player_animations=player_anims, player_anim_speed=5)
     threading.Thread(target=sock_client.receive_updates).start()
