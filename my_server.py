@@ -6,7 +6,7 @@ import settings
 import time
 
 
-class server:
+class Server:
     def __init__(self):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.ip = socket.gethostbyname(socket.gethostname())
@@ -64,7 +64,7 @@ class server:
 
 
 def main():
-    server_scoket = server()
+    server_scoket = Server()
     server_scoket.socket.bind(settings.SERVER_ADDRESS)
     arr = []
     receive_thread = threading.Thread(target=server_scoket.receive_packets, args=(arr,))
