@@ -21,7 +21,7 @@ def update_dir(player: Entity, camera):
         player.direction = 1
 
 
-def handle_keyboard(player, inv, camera, key):
+def handle_keyboard(player, inv, camera, key, all_sprites, projectile_sprites):
     if key == 120:  # X KEY
         update_dir(player, camera)
         player.melee_attack()
@@ -29,13 +29,13 @@ def handle_keyboard(player, inv, camera, key):
     elif key == 122:  # Z key
         # GET VECTOR FOR PROJECTILE:
         vect = pg.math.Vector2(pg.mouse.get_pos()[0] - WIDTH // 2, HEIGHT // 2 - pg.mouse.get_pos()[1])
-        axe = Projectile("axe", player, vect, player.groups)
+        axe = Projectile("axe", player, vect, [all_sprites, projectile_sprites])
         update_dir(player, camera)
 
     elif key == 99:  # C KEY
         # GET VECTOR FOR PROJECTILE:
         vect = pg.math.Vector2(pg.mouse.get_pos()[0] - WIDTH // 2, HEIGHT // 2 - pg.mouse.get_pos()[1])
-        arrow = Projectile("arrow", player, vect, player.groups)
+        arrow = Projectile("arrow", player, vect, [all_sprites, projectile_sprites])
         update_dir(player, camera)
 
     elif key == 114:  # R KEY
@@ -69,20 +69,20 @@ def handle_mouse(player, event, inv, camera):
         return
 
 
-def events(player, inv, camera):
+def events(player, inv, camera, all_sprites):
     for event in pg.event.get():
         if event.type == pg.QUIT:
             return False
         if event.type == pg.KEYDOWN:
-            handle_keyboard(player, inv, camera, event.key)
+            handle_keyboard(player, inv, camera, event.key, all_sprites, projectile_sprites)
         if event.type == pg.MOUSEBUTTONDOWN:
             handle_mouse(player, event, inv, camera)
     return True
 
 
-def update(all_sprites, player, camera, map_rect):
+def update(all_sprites, player, camera, map_rect, players):
     for sprite in all_sprites:
-        sprite.update(map_rect)
+        sprite.update(map_rect, players, camera, all_sprites)
 
     camera.update(player)
 
@@ -99,11 +99,11 @@ def draw(screen, all_sprites, map_img, map_rect, inv, camera):
     pg.display.update()
 
 
-def create_enemies(all_sprites, mob_anims):
+def create_enemies(sprite_groups, mob_anims):
     mobs = []
     for i in range(0, 100):
         mobs.append(
-            Entity((randint(0, 12000), randint(0, 7600)), all_sprites, choice(mob_anims), 2, 15, auto_move=True))
+            Mob((randint(0, 12000), randint(0, 7600)), sprite_groups["all"], choice(mob_anims), 2, 15))
 
 
 def run():
@@ -112,8 +112,14 @@ def run():
 
     all_sprites = pg.sprite.Group()
     entity_sprites = pg.sprite.Group()
+    players_sprites = pg.sprite.Group()
     projectile_sprites = pg.sprite.Group()
-    all_sprite_groups = [all_sprites, entity_sprites, projectile_sprites]
+    sprite_groups = {
+        "all": all_sprites,
+        "entity": entity_sprites,
+        "players": players_sprites,
+        "projectiles": projectile_sprites
+    }
 
     player_anims = {
         'idle': AnimatedSprite('graphics/Knight/KnightIdle_strip.png', 15, True),
@@ -129,19 +135,19 @@ def run():
         }
     ]
 
-    player = Entity((1400, 1360), all_sprite_groups, player_anims, 5, 5)
-    mob = Entity((1600, 1390), all_sprite_groups, choice(mob_anims), 2, 15, auto_move=True)
-    create_enemies(all_sprite_groups, mob_anims)
+    player = Player((1400, 1360), [all_sprites, players_sprites, entity_sprites], player_anims, 5, 5)
+    mob = Mob((1600, 1390), [all_sprites, entity_sprites], choice(mob_anims), 2, 15)
+    create_enemies(sprite_groups, mob_anims)
 
-    player2 = Entity((1200, 1300), all_sprite_groups, player_anims, 5, 5)
-    print(player2.id)
-    player2.move(100, 100)
-    # SETTING UP CLIENT
+    # player2 = Entity((1200, 1300), all_sprite_groups, player_anims, 5, 5)
+    # print(player2.id)
+    # player2.move(100, 100)
+    # # SETTING UP CLIENT
 
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.bind((IP, PORT))
-    game_client = client.Client(sock=sock, server=(SERVER_IP, SERVER_PORT))
-    threading.Thread(target=game_client.receive_updates, args=(entity_sprites,)).start()
+    # sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    # sock.bind((IP, PORT))
+    # game_client = client.Client(sock=sock, server=(SERVER_IP, SERVER_PORT))
+    # threading.Thread(target=game_client.receive_updates, args=(entity_sprites,)).start()
 
     # SETTING UP MAP
 
@@ -187,9 +193,9 @@ def run():
 
     player.health = 50
     while running:
-        running = events(player, inv, camera)
-        update(all_sprite_groups[0], player, camera, map_rect)  # all_sprite_groups[0] : all_sprites
-        draw(screen, all_sprite_groups[0], map_img, map_rect, inv, camera)
+        running = events(player, inv, camera, sprite_groups)
+        update(all_sprites, player, camera, map_rect, sprite_groups)
+        draw(screen, sprite_groups["all"], map_img, map_rect, inv, camera)
         clock.tick(FPS)
 
     pg.quit()
@@ -201,3 +207,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+    quit()

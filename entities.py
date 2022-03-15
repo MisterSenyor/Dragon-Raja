@@ -4,15 +4,14 @@ import pygame as pg
 from settings import *
 
 class Entity(pg.sprite.Sprite):
-    def __init__(self, pos, sprite_groups, animations, walk_speed, anim_speed, auto_move=False):
+    def __init__(self, pos, sprite_groups, animations, walk_speed, anim_speed):
         self.groups = sprite_groups
-        pg.sprite.Sprite.__init__(self, self.groups[0], self.groups[1])
+        pg.sprite.Sprite.__init__(self, sprite_groups)
         # self.groups[0]: all sprites, self.groups[1]: entity sprites
         self.id = random.randint(0, 1000000)
         self.items = pg.sprite.Group()
         self.walk_speed = walk_speed
         self.anim_speed = anim_speed
-        self.auto_move = auto_move
         self._start, self._end = (pos[0], pos[1]), (pos[0], pos[1])
         self.attack_dmg = 20
         self._i = 0
@@ -43,7 +42,7 @@ class Entity(pg.sprite.Sprite):
         self.animations[self.status].surface_index = 0
         self.animation = self.animations[self.status]
 
-    def update(self, map_rect):
+    def update(self, map_rect, players):
         """"
         UPDATES PLAYER LOCATION:
         for each iteration update pos by averaging the 'start' and 'end' for each axis
@@ -56,16 +55,7 @@ class Entity(pg.sprite.Sprite):
             return
 
         # TODO: check dt
-        if self.auto_move and random.randrange(1, 100) == 1:
-            dir_x = random.randrange(-80, 80)
-            if dir_x < 0:
-                self.direction = 1
-            else:
-                self.direction = 0
-            self.move(dir_x, random.randrange(-80, 80))
-
         # RUNNING CALCULATIONS
-
         if self.status == 'run' or self.status == 'attack':
             if self._i < self._t:
                 # UPDATE RECT AND BORDERS COLLISION CHECK:
@@ -124,6 +114,60 @@ class Entity(pg.sprite.Sprite):
     def handle_death(self):
         self.change_status('death')
         self.remove(self.groups[0], self.groups[1])
+
+
+
+
+class Player(Entity):
+    def __init__(self, pos, sprite_groups, animations, walk_speed, anim_speed):
+        Entity.__init__(self, pos, sprite_groups, animations, walk_speed, anim_speed)
+
+    def update(self, map_rect, players, camera, sprite_groups):
+        Entity.update(self, map_rect, players)
+
+
+
+class Mob(Entity):
+    def __init__(self, pos, sprite_groups, animations, walk_speed, anim_speed):
+        self.RADIUS = 500
+        self.counter = 0
+        Entity.__init__(self, pos, sprite_groups, animations, walk_speed, anim_speed)
+    
+    def update(self, map_rect, players, camera, sprite_groups):
+        for player in players:
+            if player.rect.topright[0] >= self.rect.topright[0] - self.RADIUS:
+                if player.rect.topleft[0] <= self.rect.topleft[0] + self.RADIUS:
+                    if player.rect.topright[1] >= self.rect.topright[1] - self.RADIUS:
+                        if player.rect.bottomright[1] <= self.rect.bottomright[1] + self.RADIUS:
+                            x, y = player.rect.topright[0] - self.rect.topright[0], player.rect.topright[1] - self.rect.topright[1]
+                            if x:
+                                x -= 100 * (abs(x) // x)
+                            if y:
+                                y -= 100 * (abs(y) // y)
+                            print(f"ATTACKING PLAYER AT {x}, {y}")
+                            if self.counter % 15 == 0:
+                                self.counter = 0
+                                self.move(x, y)
+                                mouse = pg.mouse.get_pos()
+                                vect = pg.math.Vector2(mouse[0] - camera.apply(self).topleft[0],
+                                                       mouse[1] - camera.apply(self).topleft[1])
+                                axe = Projectile("axe", self, vect, sprite_groups)
+                            self.counter += 1
+                            break
+                            
+                            
+        else:
+            if random.randrange(1, 100) == 1:
+                dir_x = random.randrange(-80, 80)
+                if dir_x < 0:
+                    self.direction = 1
+                else:
+                    self.direction = 0
+                self.move(dir_x, random.randrange(-80, 80))
+        
+        Entity.update(self, map_rect, players)
+
+
 
 
 class Item(pg.sprite.Sprite):
@@ -226,9 +270,9 @@ class Projectile(pg.sprite.Sprite):
     """" PROJECTILE CLASS. GETS TYPE OF PROJECTILE, ATTACKER (PLAYER/MOB), TARGET VECTOR, ALL_SPRITE_GROUPS
          TARGET VECTOR IS SCREEN VECTOR FROM PLAYER TO MOUSE """
 
-    def __init__(self, proj_type, attacker: Entity, vect: pg.math.Vector2, all_sprite_groups):
-        self.groups = all_sprite_groups
-        pg.sprite.Sprite.__init__(self, self.groups[0], self.groups[2])
+    def __init__(self, proj_type, attacker: Entity, vect: pg.math.Vector2, sprite_groups):
+        self.groups = sprite_groups
+        pg.sprite.Sprite.__init__(self, self.groups["all"], self.groups["projectiles"])
         # self.groups[0]: all sprites, self.groups[2]: projectile sprites
 
         self._start = attacker.rect.center
