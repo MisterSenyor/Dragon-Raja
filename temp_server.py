@@ -1,17 +1,22 @@
+import logging
+import queue
 import socket
 import threading
+from settings import *
+import json
+import time
 
 
 class UDPServer:
     def __init__(self):
-        self.IP = socket.gethostbyname(socket.gethostname())  # Host address
-        self.port = 1337  # Host port
+        self.IP = SERVER_IP  # Host address
+        self.port = SERVER_PORT  # Host port
         self.sock = None  # Socket
-        self.HEADER_SIZE = 32
-        self.ENCODING = 'utf-8'
-        self.Addresses = [(self.IP, self.port)]
-        self.pos = [(1400, 1360)]
+        self.HEADER_SIZE = HEADER_SIZE
+        self.ENCODING = ENCODING
         self.currentPlayer = 0
+        self.Addresses = []
+        self.updates_queue = queue.Queue()
 
     def start_server(self):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -22,64 +27,69 @@ class UDPServer:
             str(e)
         print("server started")
 
-    def read_pos(self, str):
-        str = str.split(",")
-        return int(str[0]), int(str[1])
-
-    def make_pos_str(self, tup):
-        return str(tup[0]) + "," + str(tup[1])
-
-    def threaded_client(self, data, addr):
-        player = self.curr_client(addr)
-        self.sock.sendto(str.encode(self.make_pos_str(self.pos[player])), addr)
-        reply = ""
-        self.pos[player] = data
-        player = 0
-        for addres in self.Addresses:
-            if addres[0] != addr[0]:
-                reply += self.make_pos_str(self.pos[player])
-            player += 1
-        print("Received", data)
-        if reply != "":
-            print("sending: ", reply)
-            self.sock.sendto(str.encode(self.make_pos_str(reply)), addr)
-        print("lost connection")
-
-    def wait_for_client(self):
+    def threaded_client(self):
         while True:
             (data, addr) = self.sock.recvfrom(self.HEADER_SIZE)
-            data = self.read_pos(data.decode())
-            self.new_client(addr, data)
-            if not data:
-                print("disconnected")
-            else:
+            cmd, params = self.parse_cmd(data)
+            if cmd == "connect":
+                self.new_client(addr)
 
-                client_thread = threading.Thread(target=self.threaded_client, args=(data, addr))
-                client_thread.deamon = True
-                client_thread.start()
+            ##player = self.curr_client(params["id"])
 
-    def new_client(self, addr, data):
-        for addres in self.Addresses:
-            if addres[0] == addr[0]:
-                return
-        print(addr, "    ", self.Addresses[0][0])
+            print("Received: ", cmd)
+            self.updates_queue.put({"update": cmd, **params})
+
+    def threaded_queue_send(self):
+        while True:
+            time.sleep(0.05)
+            self.threaded_send()
+
+    def threaded_send(self):
+        update = ""
+        while self.updates_queue is None:
+            update += self.updates_queue.get()
+
+        if update != "":
+            for addres in self.Addresses:
+                self.sock.sendto(update.encode(), addres)
+
+    def wait_for_client(self):
+        thread_recv = threading.Thread(target=self.threaded_client)
+        thread_queue = threading.Thread(target=self.threaded_queue_send)
+        thread_recv.start()
+        thread_queue.start()
+
+    def parse_cmd(self, data):
+        """
+        Parse cmd and params from a given message
+        :param data: the message to parse
+        :return: a tuple (cmd, params) parsed from the data
+        """
+
+        try:
+            data = data.decode()
+            cmd = json.loads(data)["cmd"]
+            json_data = "{" + data.split(",", 1)[1]
+            return cmd, json.loads(json_data)
+        except Exception:
+            logging.exception(f'exception while parsing cmd: {data}')
+            return '', {}
+
+    def new_client(self, addr):
+        data = json.dumps({'cmd': 'connect', 'id': self.currentPlayer})
+        self.sock.sendto(data.encode(), addr)
         self.currentPlayer += 1
         self.Addresses.append(addr)
-        self.pos.append(data)
 
-    def curr_client(self, addr):
-        player = 0
-        for addres in self.Addresses:
-            if addres[0] == addr[0]:
+    def curr_client(self, id):
+        player = 1
+        for x in range(1, self.currentPlayer):
+            if x == id:
                 return player
             player += 1
 
 
-
-
-
 def main():
-
     server = UDPServer()
     server.start_server()
     server.wait_for_client()

@@ -2,7 +2,7 @@ import random
 import threading
 from os import path
 from random import randint, randrange, choice
-
+import sys
 import client
 from Tilemap import *
 from animated_sprite import *
@@ -10,7 +10,21 @@ from entities import *
 
 pg.init()
 
+class MainPlayer(Entity):
+    def __init__(self, sock_client: 'client.Client', *args, **kwargs):
+        super(MainPlayer, self).__init__(*args, **kwargs)
+        self.client = sock_client
 
+    def move(self, x, y, send_update=True):
+        super(MainPlayer, self).move(x, y)
+        if send_update:
+            self.client.send_update('move', {'id': self.id, 'pos': [x, y]})
+
+    def melee_attack(self, send_update=True):
+        super(MainPlayer, self).melee_attack()
+        if send_update:
+            self.client.send_update('attack', {'id': self.id})
+            
 def update_dir(player: Entity, camera):
     """ UPDATES PLAYER DIRECTION ACCORDING TO
     MOUSE POS (0 = RIGHT, 1 = LEFT) """
@@ -135,19 +149,18 @@ def run():
         }
     ]
 
-    player = Player((1400, 1360), [all_sprites, players_sprites, entity_sprites], player_anims, 5, 5)
-    mob = Mob((1600, 1390), [all_sprites, entity_sprites], choice(mob_anims), 2, 15)
+    # SETTING UP CLIENT
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    port = PORT if len(sys.argv) == 1 else int(sys.argv[1])
+    sock.bind((IP, port))
+    sock_client = client.Client(sock=sock, server=(SERVER_IP, SERVER_PORT), all_sprite_groups=all_sprite_groups,
+                                player_animations=player_anims, player_anim_speed=5)
+    threading.Thread(target=sock_client.receive_updates).start()
+
+    player = MainPlayer(sock_client, (1400, 1360), sprite_groups, player_anims, 5, 5)
+    mob = Entity((1600, 1390), sprite_groups, choice(mob_anims), 2, 15, auto_move=True)
     create_enemies(sprite_groups, mob_anims)
-
-    # player2 = Entity((1200, 1300), all_sprite_groups, player_anims, 5, 5)
-    # print(player2.id)
-    # player2.move(100, 100)
-    # # SETTING UP CLIENT
-
-    # sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    # sock.bind((IP, PORT))
-    # game_client = client.Client(sock=sock, server=(SERVER_IP, SERVER_PORT))
-    # threading.Thread(target=game_client.receive_updates, args=(entity_sprites,)).start()
 
     # SETTING UP MAP
 
@@ -191,12 +204,18 @@ def run():
     player.items.add(speed_pot)
     inv.add_item(speed_pot)
 
+    sock_client.send_update('connect', {
+        'entity': {'id': player.id, 'pos': player.rect.topleft, 'walk_speed': player.walk_speed,
+                   'items': [{'id': item.id, 'type': item.item_type} for item in player.items]}})
+
     player.health = 50
     while running:
         running = events(player, inv, camera, sprite_groups)
         update(all_sprites, player, camera, map_rect, sprite_groups)
         draw(screen, sprite_groups["all"], map_img, map_rect, inv, camera)
         clock.tick(FPS)
+
+    sock_client.send_update('disconnect', {'id': player.id})
 
     pg.quit()
 
