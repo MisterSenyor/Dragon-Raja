@@ -9,21 +9,6 @@ from animated_sprite import *
 from entities import *
 
 pg.init()
-
-class MainPlayer(Player):
-    def __init__(self, sock_client: 'client.Client', *args, **kwargs):
-        Player.__init__(self, *args, **kwargs)
-        self.client = sock_client
-
-    def move(self, x, y, send_update=True):
-        super(MainPlayer, self).move(x, y)
-        if send_update:
-            self.client.send_update('move', {'id': self.id, 'pos': [x, y]})
-
-    def melee_attack(self, send_update=True):
-        super(MainPlayer, self).melee_attack()
-        if send_update:
-            self.client.send_update('attack', {'id': self.id})
             
 def update_dir(player: Entity, camera):
     """ UPDATES PLAYER DIRECTION ACCORDING TO
@@ -96,7 +81,7 @@ def events(player, inv, camera, sprite_groups):
 
 def update(all_sprites, player, camera, map_rect, sprite_groups):
     for sprite in sprite_groups['all']:
-        sprite.update(map_rect, player, camera, sprite_groups)
+        sprite.update(map_rect)
 
     camera.update(player)
 
@@ -159,7 +144,6 @@ def run():
     threading.Thread(target=sock_client.receive_updates).start()
 
     player = MainPlayer(sock_client, (1400, 1360), [all_sprites, entity_sprites, players_sprites], player_anims, 5, 5)
-    mob = Mob((1600, 1390), [all_sprites, entity_sprites], choice(mob_anims), 2, 15)
     create_enemies(sprite_groups, mob_anims)
 
     # SETTING UP MAP

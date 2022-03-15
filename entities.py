@@ -4,14 +4,15 @@ import pygame as pg
 from settings import *
 
 class Entity(pg.sprite.Sprite):
-    def __init__(self, pos, sprite_groups, animations, walk_speed, anim_speed):
+    def __init__(self, pos, sprite_groups, animations, walk_speed, anim_speed, auto_move=False, id_: int = None):
         self.groups = sprite_groups
-        pg.sprite.Sprite.__init__(self, sprite_groups)
+        pg.sprite.Sprite.__init__(self, self.groups)
         # self.groups[0]: all sprites, self.groups[1]: entity sprites
-        self.id = random.randint(0, 1000000)
+        self.id = id_ if id_ is not None else random.randint(0, 1000000)
         self.items = pg.sprite.Group()
         self.walk_speed = walk_speed
         self.anim_speed = anim_speed
+        self.auto_move = auto_move
         self._start, self._end = (pos[0], pos[1]), (pos[0], pos[1])
         self.attack_dmg = 20
         self._i = 0
@@ -27,8 +28,7 @@ class Entity(pg.sprite.Sprite):
         self.direction = 0
         self.animation_tick = 0
         self.health = 100
-
-    def move(self, x, y):
+    def move(self, x, y, send_update=True):
         if self.status != 'attack':
             self.change_status('run')  # CHANGE STATUS TO RUN UNLESS ATTACKING
         self._start = self.rect.center
@@ -36,25 +36,28 @@ class Entity(pg.sprite.Sprite):
         dist = ((self._end[0] - self._start[0]) ** 2 + (self._end[1] - self._start[1]) ** 2) ** 0.5
         self._t = dist / self.walk_speed
         self._i = 0
-
     def change_status(self, status):
         self.status = status
         self.animations[self.status].surface_index = 0
         self.animation = self.animations[self.status]
-
-    def update(self, map_rect, players):
+    def update(self, map_rect):
         """"
         UPDATES PLAYER LOCATION:
         for each iteration update pos by averaging the 'start' and 'end' for each axis
         """
         for item in self.items:
             item.update()
-
         if self.health <= 0:
             self.handle_death()
             return
-
         # TODO: check dt
+        if self.auto_move and random.randrange(1, 100) == 1:
+            dir_x = random.randrange(-80, 80)
+            if dir_x < 0:
+                self.direction = 1
+            else:
+                self.direction = 0
+            self.move(dir_x, random.randrange(-80, 80))
         # RUNNING CALCULATIONS
         if self.status == 'run' or self.status == 'attack':
             if self._i < self._t:
@@ -65,22 +68,17 @@ class Entity(pg.sprite.Sprite):
                     min(max(round(self._start[1] + (self._end[1] - self._start[1]) * self._i / self._t), 0),
                         map_rect.height))
                 self._i += 1
-
             else:
                 self.rect.center = self._end
                 self._t = 0
                 if self.status == 'run':  # IF RUNNING (NOT ATTACKING) HAS ENDED, CHANGE BACK TO IDLE
                     self.change_status('idle')
-
         if self.animation_tick % self.anim_speed == 0:
             self.animation.update()
-
         self.animation_tick += 1
         self.image = self.animation.image
-
         if self.direction:
             self.image = pg.transform.flip(self.image, True, False)
-
         if self.status == 'attack':
             # CHECK IF ATTACK IS FINISHED:
             if self.animation.surface_index == len(self.animation.surfaces) - 1:
@@ -90,31 +88,40 @@ class Entity(pg.sprite.Sprite):
                     self.change_status('idle')
                 else:
                     self.change_status('run')
-
             # CHECK COLLISION WITH ENTITIES:
             if not self._has_hit:  # if player hasn't already hit a target with this attack:
-                for sprite in self.groups[1]:  # groups[1] - all entities (players/mobs)
+                for sprite in self.groups['entity']:  # groups[1] - all entities (players/mobs)
                     if sprite is not self and pg.sprite.collide_rect(self, sprite):
                         sprite.health -= self.attack_dmg
                         self._has_hit = 1
-
     def draw(self, screen, camera):
         screen.blit(self.image, camera.apply(self))
         pg.draw.line(screen, (255, 0, 0),
                      (camera.apply(self).topleft[0], camera.apply(self).topleft[1] - 20),
                      (camera.apply(self).topleft[0] + self.health, camera.apply(self).topleft[1] - 20))
-
-    def melee_attack(self):
+    def melee_attack(self, send_update=True):
         if self.status == "attack":  # CHECK IF ALREADY ATTACKING
             return
         self._has_hit = 0  # CHANGE TO HASN'T HIT ALREADY
         self.anim_speed -= 3
         self.change_status('attack')
-
     def handle_death(self):
         self.change_status('death')
-        self.remove(self.groups[0], self.groups[1])
+        self.remove(self.groups['all'], self.groups['entity'])
+        
 
+class MainPlayer(Entity):
+    def __init__(self, sock_client: 'client.Client', *args, **kwargs):
+        super(MainPlayer, self).__init__(*args, **kwargs)
+        self.client = sock_client
+    def move(self, x, y, send_update=True):
+        super(MainPlayer, self).move(x, y)
+        if send_update:
+            self.client.send_update('move', {'id': self.id, 'pos': [x, y]})
+    def melee_attack(self, send_update=True):
+        super(MainPlayer, self).melee_attack()
+        if send_update:
+            self.client.send_update('attack', {'id': self.id})
 
 
 
@@ -144,26 +151,25 @@ class Mob(Entity):
                                 x -= 100 * (abs(x) // x)
                             if y:
                                 y -= 100 * (abs(y) // y)
-                            print(f"ATTACKING PLAYER AT {x}, {y}")
                             if self.counter % 100 == 0:
                                 self.counter = 0
                                 self.move(x, y)
                                 mouse = pg.mouse.get_pos()
                                 vect = pg.math.Vector2(camera.apply(player).topleft[0] - camera.apply(self).topleft[0],
-                                                       camera.apply(player).topleft[0]- camera.apply(self).topleft[1])
+                                                       camera.apply(player).topleft[1] - camera.apply(self).topleft[1])
                                 axe = Projectile("axe", self, vect, sprite_groups)
                             self.counter += 1
                             break
                             
                             
         else:
-            if random.randrange(1, 100) == 1:
-                dir_x = random.randrange(-80, 80)
+            if random.random.randrange(1, 100) == 1:
+                dir_x = random.random.randrange(-80, 80)
                 if dir_x < 0:
                     self.direction = 1
                 else:
                     self.direction = 0
-                self.move(dir_x, random.randrange(-80, 80))
+                self.move(dir_x, random.random.randrange(-80, 80))
         
         Entity.update(self, map_rect, sprite_groups['players'])
 

@@ -23,6 +23,7 @@ class Client:
         self.sock.sendto(json.dumps({'cmd': cmd, **params}).encode() + b'\n', self.server)
 
     def create_entity(self, entity: dict):
+        print(f"ADDING ENTITY {entity}")
         e = game.Entity(pos=entity['pos'], sprite_groups=self.sprite_groups,
                         animations=self.player_animations,
                         walk_speed=entity['walk_speed'], anim_speed=self.player_anim_speed, id_=entity['id'])
@@ -31,7 +32,7 @@ class Client:
             pass
 
     def get_entity_by_id(self, id_: int):
-        entity_sprites, projectile_sprites = self.sprite_groups[1:]
+        entity_sprites, projectile_sprites = self.sprite_groups['entity'], self.sprite_groups['projectiles']
         ids = [entity.id for entity in entity_sprites.sprites()]
         return entity_sprites.sprites()[ids.index(id_)]
 
@@ -41,7 +42,7 @@ class Client:
                         vect=pygame.Vector2(projectile['target']), send_update=False)
 
     def handle_update(self, update: dict):
-        entity_sprites, projectile_sprites = self.sprite_groups['all'], self.sprite_groups['projectiles']
+        entity_sprites, projectile_sprites = self.sprite_groups['entity'], self.sprite_groups['projectiles']
         cmd = update['cmd']
         ids = [entity.id for entity in entity_sprites.sprites()]
 
