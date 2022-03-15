@@ -10,9 +10,9 @@ from entities import *
 
 pg.init()
 
-class MainPlayer(Entity):
+class MainPlayer(Player):
     def __init__(self, sock_client: 'client.Client', *args, **kwargs):
-        super(MainPlayer, self).__init__(*args, **kwargs)
+        Player.__init__(self, *args, **kwargs)
         self.client = sock_client
 
     def move(self, x, y, send_update=True):
@@ -35,7 +35,7 @@ def update_dir(player: Entity, camera):
         player.direction = 1
 
 
-def handle_keyboard(player, inv, camera, key, all_sprites, projectile_sprites):
+def handle_keyboard(player, inv, camera, key, sprite_groups):
     if key == 120:  # X KEY
         update_dir(player, camera)
         player.melee_attack()
@@ -43,13 +43,13 @@ def handle_keyboard(player, inv, camera, key, all_sprites, projectile_sprites):
     elif key == 122:  # Z key
         # GET VECTOR FOR PROJECTILE:
         vect = pg.math.Vector2(pg.mouse.get_pos()[0] - WIDTH // 2, HEIGHT // 2 - pg.mouse.get_pos()[1])
-        axe = Projectile("axe", player, vect, [all_sprites, projectile_sprites])
+        axe = Projectile("axe", player, vect, [sprite_groups['all'], sprite_groups['projectiles']])
         update_dir(player, camera)
 
     elif key == 99:  # C KEY
         # GET VECTOR FOR PROJECTILE:
         vect = pg.math.Vector2(pg.mouse.get_pos()[0] - WIDTH // 2, HEIGHT // 2 - pg.mouse.get_pos()[1])
-        arrow = Projectile("arrow", player, vect, [all_sprites, projectile_sprites])
+        arrow = Projectile("arrow", player, vect, [sprite_groups['all'], sprite_groups['projectiles']])
         update_dir(player, camera)
 
     elif key == 114:  # R KEY
@@ -83,20 +83,20 @@ def handle_mouse(player, event, inv, camera):
         return
 
 
-def events(player, inv, camera, all_sprites):
+def events(player, inv, camera, sprite_groups):
     for event in pg.event.get():
         if event.type == pg.QUIT:
             return False
         if event.type == pg.KEYDOWN:
-            handle_keyboard(player, inv, camera, event.key, all_sprites, projectile_sprites)
+            handle_keyboard(player, inv, camera, event.key, sprite_groups)
         if event.type == pg.MOUSEBUTTONDOWN:
             handle_mouse(player, event, inv, camera)
     return True
 
 
-def update(all_sprites, player, camera, map_rect, players):
-    for sprite in all_sprites:
-        sprite.update(map_rect, players, camera, all_sprites)
+def update(all_sprites, player, camera, map_rect, sprite_groups):
+    for sprite in sprite_groups['all']:
+        sprite.update(map_rect, player, camera, sprite_groups)
 
     camera.update(player)
 
@@ -154,12 +154,12 @@ def run():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     port = PORT if len(sys.argv) == 1 else int(sys.argv[1])
     sock.bind((IP, port))
-    sock_client = client.Client(sock=sock, server=(SERVER_IP, SERVER_PORT), all_sprite_groups=all_sprite_groups,
+    sock_client = client.Client(sock=sock, server=(SERVER_IP, SERVER_PORT), sprite_groups=sprite_groups,
                                 player_animations=player_anims, player_anim_speed=5)
     threading.Thread(target=sock_client.receive_updates).start()
 
-    player = MainPlayer(sock_client, (1400, 1360), sprite_groups, player_anims, 5, 5)
-    mob = Entity((1600, 1390), sprite_groups, choice(mob_anims), 2, 15, auto_move=True)
+    player = MainPlayer(sock_client, (1400, 1360), [all_sprites, entity_sprites, players_sprites], player_anims, 5, 5)
+    mob = Mob((1600, 1390), [all_sprites, entity_sprites], choice(mob_anims), 2, 15)
     create_enemies(sprite_groups, mob_anims)
 
     # SETTING UP MAP

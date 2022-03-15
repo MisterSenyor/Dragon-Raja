@@ -10,11 +10,11 @@ from settings import *
 
 
 class Client:
-    def __init__(self, sock: socket.socket, server: Address, all_sprite_groups: Sequence[pygame.sprite.Group],
+    def __init__(self, sock: socket.socket, server: Address, sprite_groups: Sequence[pygame.sprite.Group],
                  player_animations, player_anim_speed):
         self.sock = sock
         self.server = server
-        self.all_sprite_groups = all_sprite_groups
+        self.sprite_groups = sprite_groups
         self.player_animations = player_animations
         self.player_anim_speed = player_anim_speed
         self.main_player_id = None
@@ -23,7 +23,7 @@ class Client:
         self.sock.sendto(json.dumps({'cmd': cmd, **params}).encode() + b'\n', self.server)
 
     def create_entity(self, entity: dict):
-        e = game.Entity(pos=entity['pos'], sprite_groups=self.all_sprite_groups,
+        e = game.Entity(pos=entity['pos'], sprite_groups=self.sprite_groups,
                         animations=self.player_animations,
                         walk_speed=entity['walk_speed'], anim_speed=self.player_anim_speed, id_=entity['id'])
         for item in entity['items']:
@@ -31,17 +31,17 @@ class Client:
             pass
 
     def get_entity_by_id(self, id_: int):
-        entity_sprites, projectile_sprites = self.all_sprite_groups[1:]
+        entity_sprites, projectile_sprites = self.sprite_groups[1:]
         ids = [entity.id for entity in entity_sprites.sprites()]
         return entity_sprites.sprites()[ids.index(id_)]
 
     def create_projectile(self, projectile: dict):
         attacker = self.get_entity_by_id(projectile['attacker_id'])
-        game.Projectile(proj_type=projectile['type'], attacker=attacker, all_sprite_groups=self.all_sprite_groups,
+        game.Projectile(proj_type=projectile['type'], attacker=attacker, sprite_groups=self.sprite_groups,
                         vect=pygame.Vector2(projectile['target']), send_update=False)
 
     def handle_update(self, update: dict):
-        entity_sprites, projectile_sprites = self.all_sprite_groups[1:]
+        entity_sprites, projectile_sprites = self.sprite_groups['all'], self.sprite_groups['projectiles']
         cmd = update['cmd']
         ids = [entity.id for entity in entity_sprites.sprites()]
 

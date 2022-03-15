@@ -122,8 +122,8 @@ class Player(Entity):
     def __init__(self, pos, sprite_groups, animations, walk_speed, anim_speed):
         Entity.__init__(self, pos, sprite_groups, animations, walk_speed, anim_speed)
 
-    def update(self, map_rect, players, camera, sprite_groups):
-        Entity.update(self, map_rect, players)
+    def update(self, map_rect, player, camera, sprite_groups):
+        Entity.update(self, map_rect, sprite_groups['players'])
 
 
 
@@ -133,8 +133,8 @@ class Mob(Entity):
         self.counter = 0
         Entity.__init__(self, pos, sprite_groups, animations, walk_speed, anim_speed)
     
-    def update(self, map_rect, players, camera, sprite_groups):
-        for player in players:
+    def update(self, map_rect, player, camera, sprite_groups):
+        for player in sprite_groups["players"]:
             if player.rect.topright[0] >= self.rect.topright[0] - self.RADIUS:
                 if player.rect.topleft[0] <= self.rect.topleft[0] + self.RADIUS:
                     if player.rect.topright[1] >= self.rect.topright[1] - self.RADIUS:
@@ -145,12 +145,12 @@ class Mob(Entity):
                             if y:
                                 y -= 100 * (abs(y) // y)
                             print(f"ATTACKING PLAYER AT {x}, {y}")
-                            if self.counter % 15 == 0:
+                            if self.counter % 100 == 0:
                                 self.counter = 0
                                 self.move(x, y)
                                 mouse = pg.mouse.get_pos()
-                                vect = pg.math.Vector2(mouse[0] - camera.apply(self).topleft[0],
-                                                       mouse[1] - camera.apply(self).topleft[1])
+                                vect = pg.math.Vector2(camera.apply(player).topleft[0] - camera.apply(self).topleft[0],
+                                                       camera.apply(player).topleft[0]- camera.apply(self).topleft[1])
                                 axe = Projectile("axe", self, vect, sprite_groups)
                             self.counter += 1
                             break
@@ -165,7 +165,7 @@ class Mob(Entity):
                     self.direction = 0
                 self.move(dir_x, random.randrange(-80, 80))
         
-        Entity.update(self, map_rect, players)
+        Entity.update(self, map_rect, sprite_groups['players'])
 
 
 
@@ -181,6 +181,7 @@ class Item(pg.sprite.Sprite):
         self.image = pg.image.load('graphics/items/' + item_type + ".png")
         self.rect = self.image.get_rect()
         self.duration = 0  # duration of item's effect to last
+        self.id = 0 # TODO - this is only temporary
 
     def use_item(self):
         """" USES ITEM. FOR EACH ITEM EXISTS A SPECIAL EFFECT AND DURATION"""
@@ -301,7 +302,7 @@ class Projectile(pg.sprite.Sprite):
 
         self._i = 0  # ITERATION
 
-    def update(self, map_rect):
+    def update(self, map_rect, player, camera, sprite_groups):
         """" UPDATES PROJECTILE: RECT POS, BORDER AND ENTITY COLLISIONS"""
 
         # UPDATE POS WITH EACH AXIS SPEED BY ITERATION:
@@ -309,13 +310,13 @@ class Projectile(pg.sprite.Sprite):
         self.rect.center = self._start[0] + (self._speed_x * self._i), self._start[1] + (self._speed_y * self._i)
         # CHECK BORDERS:
         if self.rect.centerx > map_rect.width or self.rect.centerx < 0 or self.rect.centery > map_rect.height or self.rect.centery < 0:
-            self.remove(self.groups[0], self.groups[2])
+            self.remove(self.groups['all'], self.groups['projectiles'])
 
         # CHECK COLLISION WITH ENTITIES:
-        for sprite in self.groups[1]:  # groups[1] - all entities (players/mobs)
+        for sprite in self.groups['entity']:  # groups[1] - all entities (players/mobs)
             if sprite is not self.attacker and pg.sprite.collide_rect(self, sprite):
                 sprite.health -= self.damage
-                self.remove(self.groups[0], self.groups[2])
+                self.remove(self.groups['all'], self.groups['projectiles'])
 
     def draw(self, screen, camera):
         screen.blit(self.image, camera.apply(self))
