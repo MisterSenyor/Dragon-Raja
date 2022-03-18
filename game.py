@@ -9,7 +9,8 @@ from animated_sprite import *
 from entities import *
 
 pg.init()
-            
+
+
 def update_dir(player: Entity, camera):
     """ UPDATES PLAYER DIRECTION ACCORDING TO
     MOUSE POS (0 = RIGHT, 1 = LEFT) """
@@ -28,13 +29,16 @@ def handle_keyboard(player, inv, camera, key, sprite_groups):
     elif key == 122:  # Z key
         # GET VECTOR FOR PROJECTILE:
         vect = pg.math.Vector2(pg.mouse.get_pos()[0] - WIDTH // 2, HEIGHT // 2 - pg.mouse.get_pos()[1])
-        axe = Projectile("axe", player, vect, [sprite_groups['all'], sprite_groups['projectiles']])
+        axe = Projectile("axe", player, vect, [sprite_groups["all"], sprite_groups["projectiles"]])
+
         update_dir(player, camera)
 
     elif key == 99:  # C KEY
         # GET VECTOR FOR PROJECTILE:
         vect = pg.math.Vector2(pg.mouse.get_pos()[0] - WIDTH // 2, HEIGHT // 2 - pg.mouse.get_pos()[1])
-        arrow = Projectile("arrow", player, vect, [sprite_groups['all'], sprite_groups['projectiles']])
+        # arrow = Projectile("arrow", player, vect, sprite_groups)
+        arrow = Projectile("arrow", player, vect, [sprite_groups["all"], sprite_groups["projectiles"]])
+
         update_dir(player, camera)
 
     elif key == 114:  # R KEY
@@ -81,7 +85,8 @@ def events(player, inv, camera, sprite_groups):
 
 def update(all_sprites, player, camera, map_rect, sprite_groups):
     for sprite in sprite_groups['all']:
-        sprite.update(map_rect)
+        sprite.update(map_rect, sprite_groups)
+        sprite.update(map_rect, sprite_groups)
 
     camera.update(player)
 
@@ -102,7 +107,7 @@ def create_enemies(sprite_groups, mob_anims):
     mobs = []
     for i in range(0, 100):
         mobs.append(
-            Mob((randint(0, 12000), randint(0, 7600)), sprite_groups["all"], choice(mob_anims), 2, 15))
+            Mob((randint(0, 12000), randint(0, 7600)), [sprite_groups["all"], sprite_groups["entity"]], choice(mob_anims), 2, 15))
 
 
 def run():
@@ -119,6 +124,7 @@ def run():
         "players": players_sprites,
         "projectiles": projectile_sprites
     }
+
 
     player_anims = {
         'idle': AnimatedSprite('graphics/Knight/KnightIdle_strip.png', 15, True),
@@ -143,7 +149,7 @@ def run():
                                 player_animations=player_anims, player_anim_speed=5)
     threading.Thread(target=sock_client.receive_updates).start()
 
-    player = MainPlayer(sock_client, (1400, 1360), [all_sprites, entity_sprites, players_sprites], player_anims, 5, 5)
+    player = MainPlayer(sock_client, (1400, 1360), [sprite_groups["all"], sprite_groups["entity"], sprite_groups["players"]], player_anims, 5, 5)
     create_enemies(sprite_groups, mob_anims)
 
     # SETTING UP MAP
@@ -175,12 +181,7 @@ def run():
     inv.add_item(strength_pot)
     player.items.add(strength_pot)
     inv.add_item(strength_pot)
-    player.items.add(strength_pot)
-    inv.add_item(strength_pot)
-    player.items.add(heal_pot)
-    inv.add_item(heal_pot)
-    player.items.add(speed_pot)
-    inv.add_item(speed_pot)
+
 
     player.items.add(speed_pot)
     inv.add_item(speed_pot)

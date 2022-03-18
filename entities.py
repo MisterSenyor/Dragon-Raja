@@ -1,7 +1,8 @@
 import random
 import pygame as pg
-
+from random import randint, randrange, choice
 from settings import *
+
 
 class Entity(pg.sprite.Sprite):
     def __init__(self, pos, sprite_groups, animations, walk_speed, anim_speed, auto_move=False, id_: int = None):
@@ -28,6 +29,7 @@ class Entity(pg.sprite.Sprite):
         self.direction = 0
         self.animation_tick = 0
         self.health = 100
+
     def move(self, x, y, send_update=True):
         if self.status != 'attack':
             self.change_status('run')  # CHANGE STATUS TO RUN UNLESS ATTACKING
@@ -36,11 +38,13 @@ class Entity(pg.sprite.Sprite):
         dist = ((self._end[0] - self._start[0]) ** 2 + (self._end[1] - self._start[1]) ** 2) ** 0.5
         self._t = dist / self.walk_speed
         self._i = 0
+
     def change_status(self, status):
         self.status = status
         self.animations[self.status].surface_index = 0
         self.animation = self.animations[self.status]
-    def update(self, map_rect):
+
+    def update(self, map_rect, sprite_groups):
         """"
         UPDATES PLAYER LOCATION:
         for each iteration update pos by averaging the 'start' and 'end' for each axis
@@ -90,48 +94,51 @@ class Entity(pg.sprite.Sprite):
                     self.change_status('run')
             # CHECK COLLISION WITH ENTITIES:
             if not self._has_hit:  # if player hasn't already hit a target with this attack:
-                for sprite in self.groups['entity']:  # groups[1] - all entities (players/mobs)
+                for sprite in sprite_groups['entity']:  # groups[1] - all entities (players/mobs)
                     if sprite is not self and pg.sprite.collide_rect(self, sprite):
                         sprite.health -= self.attack_dmg
                         self._has_hit = 1
+
     def draw(self, screen, camera):
         screen.blit(self.image, camera.apply(self))
         pg.draw.line(screen, (255, 0, 0),
                      (camera.apply(self).topleft[0], camera.apply(self).topleft[1] - 20),
                      (camera.apply(self).topleft[0] + self.health, camera.apply(self).topleft[1] - 20))
+
     def melee_attack(self, send_update=True):
         if self.status == "attack":  # CHECK IF ALREADY ATTACKING
             return
         self._has_hit = 0  # CHANGE TO HASN'T HIT ALREADY
         self.anim_speed -= 3
         self.change_status('attack')
+
     def handle_death(self):
         self.change_status('death')
-        self.remove(self.groups['all'], self.groups['entity'])
-        
-
-class MainPlayer(Entity):
-    def __init__(self, sock_client: 'client.Client', *args, **kwargs):
-        super(MainPlayer, self).__init__(*args, **kwargs)
-        self.client = sock_client
-    def move(self, x, y, send_update=True):
-        super(MainPlayer, self).move(x, y)
-        if send_update:
-            self.client.send_update('move', {'id': self.id, 'pos': [x, y]})
-    def melee_attack(self, send_update=True):
-        super(MainPlayer, self).melee_attack()
-        if send_update:
-            self.client.send_update('attack', {'id': self.id})
-
+        self.remove(self.groups)
 
 
 class Player(Entity):
     def __init__(self, pos, sprite_groups, animations, walk_speed, anim_speed):
         Entity.__init__(self, pos, sprite_groups, animations, walk_speed, anim_speed)
 
-    def update(self, map_rect, player, camera, sprite_groups):
-        Entity.update(self, map_rect, sprite_groups['players'])
+    def update(self, map_rect, sprite_groups):
+        Entity.update(self, map_rect, sprite_groups)
 
+
+class MainPlayer(Player):
+    def __init__(self, sock_client: 'client.Client', *args, **kwargs):
+        super(MainPlayer, self).__init__(*args, **kwargs)
+        self.client = sock_client
+
+    def move(self, x, y, send_update=True):
+        super(MainPlayer, self).move(x, y)
+        if send_update:
+            self.client.send_update('move', {'id': self.id, 'pos': [x, y]})
+
+    def melee_attack(self, send_update=True):
+        super(MainPlayer, self).melee_attack()
+        if send_update:
+            self.client.send_update('attack', {'id': self.id})
 
 
 class Mob(Entity):
@@ -139,14 +146,15 @@ class Mob(Entity):
         self.RADIUS = 500
         self.counter = 0
         Entity.__init__(self, pos, sprite_groups, animations, walk_speed, anim_speed)
-    
-    def update(self, map_rect, player, camera, sprite_groups):
+
+    def update(self, map_rect, sprite_groups):
         for player in sprite_groups["players"]:
             if player.rect.topright[0] >= self.rect.topright[0] - self.RADIUS:
                 if player.rect.topleft[0] <= self.rect.topleft[0] + self.RADIUS:
                     if player.rect.topright[1] >= self.rect.topright[1] - self.RADIUS:
                         if player.rect.bottomright[1] <= self.rect.bottomright[1] + self.RADIUS:
-                            x, y = player.rect.topright[0] - self.rect.topright[0], player.rect.topright[1] - self.rect.topright[1]
+                            x, y = player.rect.topright[0] - self.rect.topright[0], player.rect.topright[1] - \
+                                   self.rect.topright[1]
                             if x:
                                 x -= 100 * (abs(x) // x)
                             if y:
@@ -155,25 +163,22 @@ class Mob(Entity):
                                 self.counter = 0
                                 self.move(x, y)
                                 mouse = pg.mouse.get_pos()
-                                vect = pg.math.Vector2(camera.apply(player).topleft[0] - camera.apply(self).topleft[0],
-                                                       camera.apply(player).topleft[1] - camera.apply(self).topleft[1])
-                                axe = Projectile("axe", self, vect, sprite_groups)
+                                vect = pg.math.Vector2(player.rect.topleft[0] - self.rect.topleft[0],
+                                                       player.rect.topleft[1] - self.rect.topleft[1])
+                                axe = Projectile("axe", self, vect, [sprite_groups["all"], sprite_groups["projectiles"]])
                             self.counter += 1
                             break
-                            
-                            
+
         else:
-            if random.random.randrange(1, 100) == 1:
-                dir_x = random.random.randrange(-80, 80)
+            if random.randrange(1, 100) == 1:
+                dir_x = random.randrange(-80, 80)
                 if dir_x < 0:
                     self.direction = 1
                 else:
                     self.direction = 0
-                self.move(dir_x, random.random.randrange(-80, 80))
-        
-        Entity.update(self, map_rect, sprite_groups['players'])
+                self.move(dir_x, random.randrange(-80, 80))
 
-
+        Entity.update(self, map_rect, sprite_groups)
 
 
 class Item(pg.sprite.Sprite):
@@ -187,7 +192,7 @@ class Item(pg.sprite.Sprite):
         self.image = pg.image.load('graphics/items/' + item_type + ".png")
         self.rect = self.image.get_rect()
         self.duration = 0  # duration of item's effect to last
-        self.id = 0 # TODO - this is only temporary
+        self.id = 0  # TODO - this is only temporary
 
     def use_item(self):
         """" USES ITEM. FOR EACH ITEM EXISTS A SPECIAL EFFECT AND DURATION"""
@@ -279,7 +284,7 @@ class Projectile(pg.sprite.Sprite):
 
     def __init__(self, proj_type, attacker: Entity, vect: pg.math.Vector2, sprite_groups):
         self.groups = sprite_groups
-        pg.sprite.Sprite.__init__(self, self.groups["all"], self.groups["projectiles"])
+        pg.sprite.Sprite.__init__(self, sprite_groups)
         # self.groups[0]: all sprites, self.groups[2]: projectile sprites
 
         self._start = attacker.rect.center
@@ -308,7 +313,7 @@ class Projectile(pg.sprite.Sprite):
 
         self._i = 0  # ITERATION
 
-    def update(self, map_rect, player, camera, sprite_groups):
+    def update(self, map_rect, sprite_groups):
         """" UPDATES PROJECTILE: RECT POS, BORDER AND ENTITY COLLISIONS"""
 
         # UPDATE POS WITH EACH AXIS SPEED BY ITERATION:
@@ -316,13 +321,14 @@ class Projectile(pg.sprite.Sprite):
         self.rect.center = self._start[0] + (self._speed_x * self._i), self._start[1] + (self._speed_y * self._i)
         # CHECK BORDERS:
         if self.rect.centerx > map_rect.width or self.rect.centerx < 0 or self.rect.centery > map_rect.height or self.rect.centery < 0:
-            self.remove(self.groups['all'], self.groups['projectiles'])
+            self.remove(self.groups)
 
         # CHECK COLLISION WITH ENTITIES:
-        for sprite in self.groups['entity']:  # groups[1] - all entities (players/mobs)
+        for sprite in sprite_groups['entity']:  # groups[1] - all entities (players/mobs)
             if sprite is not self.attacker and pg.sprite.collide_rect(self, sprite):
+                print("hi")
                 sprite.health -= self.damage
-                self.remove(self.groups['all'], self.groups['projectiles'])
+                self.remove(self.groups)
 
     def draw(self, screen, camera):
         screen.blit(self.image, camera.apply(self))
