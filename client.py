@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Sequence
+from typing import Dict
 
 import pygame
 
@@ -10,7 +10,7 @@ from settings import *
 
 
 class Client:
-    def __init__(self, sock: socket.socket, server: Address, sprite_groups: Sequence[pygame.sprite.Group],
+    def __init__(self, sock: socket.socket, server: Address, sprite_groups: Dict[str, pygame.sprite.Group],
                  player_animations, player_anim_speed):
         self.sock = sock
         self.server = server
@@ -19,12 +19,16 @@ class Client:
         self.player_anim_speed = player_anim_speed
         self.main_player_id = None
 
+        self.entity_sprite_groups = [self.sprite_groups['all'], self.sprite_groups['entity']]
+        self.projectile_sprite_groups = [self.sprite_groups['all'], self.sprite_groups['projectiles']]
+        self.player_sprite_groups = self.entity_sprite_groups + [self.sprite_groups['players']]
+
     def send_update(self, cmd: str, params: dict):
         self.sock.sendto(json.dumps({'cmd': cmd, **params}).encode() + b'\n', self.server)
 
     def create_entity(self, entity: dict):
         print(f"ADDING ENTITY {entity}")
-        e = game.Entity(pos=entity['pos'], sprite_groups=self.sprite_groups,
+        e = game.Entity(pos=entity['pos'], sprite_groups=self.entity_sprite_groups,
                         animations=self.player_animations,
                         walk_speed=entity['walk_speed'], anim_speed=self.player_anim_speed, id_=entity['id'])
         for item in entity['items']:
@@ -32,13 +36,14 @@ class Client:
             pass
 
     def get_entity_by_id(self, id_: int):
-        entity_sprites, projectile_sprites = self.sprite_groups['entity'], self.sprite_groups['projectiles']
+        entity_sprites = self.sprite_groups['entity']
         ids = [entity.id for entity in entity_sprites.sprites()]
         return entity_sprites.sprites()[ids.index(id_)]
 
     def create_projectile(self, projectile: dict):
         attacker = self.get_entity_by_id(projectile['attacker_id'])
-        game.Projectile(proj_type=projectile['type'], attacker=attacker, sprite_groups=self.sprite_groups,
+        game.Projectile(proj_type=projectile['type'], attacker=attacker,
+                        sprite_groups=self.projectile_sprite_groups,
                         vect=pygame.Vector2(projectile['target']), send_update=False)
 
     def handle_update(self, update: dict):
@@ -49,7 +54,7 @@ class Client:
         if cmd == 'new':
             if update['entity']['id'] not in ids:
                 self.create_entity(update['entity'])
-        elif cmd == 'projectile' and update['projectile']['attacker_id'] != self.main_player_id:
+        elif cmd == 'projectile' and update['id'] != self.main_player_id:
             self.create_projectile(update['projectile'])
         elif update['id'] != self.main_player_id:
             entity = self.get_entity_by_id(update['id'])

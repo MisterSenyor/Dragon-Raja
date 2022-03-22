@@ -1,13 +1,17 @@
 import random
+from typing import Iterable
+
 import pygame as pg
-from random import randint, randrange, choice
+
+import client
 from settings import *
 
 
 class Entity(pg.sprite.Sprite):
-    def __init__(self, pos, sprite_groups, animations, walk_speed, anim_speed, auto_move=False, id_: int = None):
+    def __init__(self, pos, sprite_groups: Iterable[pg.sprite.Group], animations, walk_speed, anim_speed,
+                 auto_move=False, id_: int = None):
         self.groups = sprite_groups
-        pg.sprite.Sprite.__init__(self, self.groups)
+        pg.sprite.Sprite.__init__(self, *self.groups)
         # self.groups[0]: all sprites, self.groups[1]: entity sprites
         self.id = id_ if id_ is not None else random.randint(0, 1000000)
         self.items = pg.sprite.Group()
@@ -165,7 +169,8 @@ class Mob(Entity):
                                 mouse = pg.mouse.get_pos()
                                 vect = pg.math.Vector2(player.rect.topleft[0] - self.rect.topleft[0],
                                                        player.rect.topleft[1] - self.rect.topleft[1])
-                                axe = Projectile("axe", self, vect, [sprite_groups["all"], sprite_groups["projectiles"]])
+                                axe = Projectile("axe", self, vect,
+                                                 [sprite_groups["all"], sprite_groups["projectiles"]])
                             self.counter += 1
                             break
 
@@ -194,7 +199,7 @@ class Item(pg.sprite.Sprite):
         self.duration = 0  # duration of item's effect to last
         self.id = 0  # TODO - this is only temporary
 
-    def use_item(self):
+    def use_item(self, send_update=True):
         """" USES ITEM. FOR EACH ITEM EXISTS A SPECIAL EFFECT AND DURATION"""
         if self.item_type == 'strength_pot':
             self.owner.attack_dmg += 10
@@ -212,6 +217,9 @@ class Item(pg.sprite.Sprite):
             return
         else:
             self.owner.health = 100
+
+        if isinstance(self.owner, MainPlayer) and send_update:
+            self.owner.client.send_update('use_item', {'id': self.owner.id, 'item_id': self.id})
 
     def update(self):
         # DECREASE DURATION IN EACH TICK
@@ -282,7 +290,7 @@ class Projectile(pg.sprite.Sprite):
     """" PROJECTILE CLASS. GETS TYPE OF PROJECTILE, ATTACKER (PLAYER/MOB), TARGET VECTOR, ALL_SPRITE_GROUPS
          TARGET VECTOR IS SCREEN VECTOR FROM PLAYER TO MOUSE """
 
-    def __init__(self, proj_type, attacker: Entity, vect: pg.math.Vector2, sprite_groups):
+    def __init__(self, proj_type, attacker: Entity, vect: pg.math.Vector2, sprite_groups, send_update=True):
         self.groups = sprite_groups
         pg.sprite.Sprite.__init__(self, sprite_groups)
         # self.groups[0]: all sprites, self.groups[2]: projectile sprites
@@ -312,6 +320,13 @@ class Projectile(pg.sprite.Sprite):
         self._speed_y = - (vect.y / vect.length()) * self._speed
 
         self._i = 0  # ITERATION
+
+        # send update to server
+        if isinstance(self.attacker, MainPlayer) and send_update:
+            self.attacker.client.send_update(
+                'projectile',
+                {'id': self.attacker.id,
+                 'projectile': {'target': list(vect), 'type': proj_type, 'attacker_id': self.attacker.id}})
 
     def update(self, map_rect, sprite_groups):
         """" UPDATES PROJECTILE: RECT POS, BORDER AND ENTITY COLLISIONS"""
