@@ -58,8 +58,8 @@ def handle_mouse(player, event, inv, camera):
 
         # MOVE THE PLAYER ACCORDING TO MOUSE POS
         mouse = pg.mouse.get_pos()
-        player.move(mouse[0] - camera.apply(player).topleft[0],
-                    mouse[1] - camera.apply(player).topleft[1])
+        player.move(player.rect.centerx + mouse[0] - camera.apply(player).topleft[0],
+                    player.rect.centery + mouse[1] - camera.apply(player).topleft[1])
         return
 
     # CHECK MOUSE SCROLL WHEEL:

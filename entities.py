@@ -38,7 +38,7 @@ class Entity(pg.sprite.Sprite):
         if self.status != 'attack':
             self.change_status('run')  # CHANGE STATUS TO RUN UNLESS ATTACKING
         self._start = self.rect.center
-        self._end = self._start[0] + x, self._start[1] + y
+        self._end = x, y
         dist = ((self._end[0] - self._start[0]) ** 2 + (self._end[1] - self._start[1]) ** 2) ** 0.5
         self._t = dist / self.walk_speed
         self._i = 0
