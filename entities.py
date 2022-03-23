@@ -165,10 +165,10 @@ class Mob(Entity):
                                 y -= 100 * (abs(y) // y)
                             if self.counter % 100 == 0:
                                 self.counter = 0
-                                self.move(x, y)
+                                self.move(self.rect.centerx + x, self.rect.centery + y)
                                 mouse = pg.mouse.get_pos()
                                 vect = pg.math.Vector2(player.rect.topleft[0] - self.rect.topleft[0],
-                                                       player.rect.topleft[1] - self.rect.topleft[1])
+                                                       self.rect.topleft[1] - player.rect.topleft[1])
                                 axe = Projectile("axe", self, vect,
                                                  [sprite_groups["all"], sprite_groups["projectiles"]])
                             self.counter += 1
