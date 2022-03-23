@@ -341,7 +341,6 @@ class Projectile(pg.sprite.Sprite):
         # CHECK COLLISION WITH ENTITIES:
         for sprite in sprite_groups['entity']:  # groups[1] - all entities (players/mobs)
             if sprite is not self.attacker and pg.sprite.collide_rect(self, sprite):
-                print("hi")
                 sprite.health -= self.damage
                 self.remove(self.groups)
 
