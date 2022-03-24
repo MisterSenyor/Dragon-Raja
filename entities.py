@@ -4,6 +4,7 @@ from typing import Iterable
 import pygame as pg
 
 import client
+import collections
 from settings import *
 
 
@@ -390,3 +391,45 @@ class Projectile(pg.sprite.Sprite):
 
     def draw(self, screen, camera):
         screen.blit(self.image, camera.apply(self))
+
+
+class Chat(pg.sprite.Sprite):
+    def __init__(self, lines = collections.deque([])):
+        pg.sprite.Sprite.__init__(self)
+        self.font = pg.font.Font(pg.font.get_default_font(), 25)
+        self.lines = lines
+        self.cur_typed = '' # LINE BEING TYPED BY CLIENT
+        self.color = BLACK
+        self.is_pressed = False  # WHETHER BUTTON TO CHAT HAS BEEN PRESSED OR NOT
+
+    def add_line(self, line: str):
+        # CHECK IF CHAT NOT FULL:
+        if len(self.lines) < 8:
+            self.lines.append(line)
+        else:
+            # IF FULL, REMOVE LAST LINE AND INSERT NEW LINE AS FIRST
+            self.lines.pop()
+            self.lines.appendleft(line)
+
+    def send_line(self, line):
+        self.add_line(line)
+        # TODO: SEND LINE TO SERVER
+        pass
+
+    def update(self, screen):
+        # BLIT EVERY LINE TOP LEFT OF SCREEN:
+        count = 0
+        for line in self.lines:
+            text = self.font.render(line, True, self.color)
+            screen.blit(text, (0, count * 20))
+            count += 1
+
+        # PRINT CURRENTLY TYPED LINE IF THERE IS ONE:
+        if self.cur_typed != '':
+            text = self.font.render(self.cur_typed, True, self.color)
+            screen.blit(text, (0, count * 20))
+
+
+
+
+
