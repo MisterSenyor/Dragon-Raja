@@ -11,38 +11,6 @@ from entities import *
 pg.init()
 
 
-def skill_1(player, sprite_groups):
-    """ SKILL 1: CIRCLE OF AXES THROWN AROUND PLAYER"""
-    vect = pg.math.Vector2(0, 1)
-    for i in range(0, 9):
-        axe = Projectile("axe", player, vect, [sprite_groups["all"], sprite_groups["projectiles"]])
-        vect = vect.rotate(45)
-
-
-def skill_2(player, sprite_groups):
-    """"SKILL 2: BUFFS: GETS TEMP STRENGTH, TEMP SPEED AND INSTANT HEAL"""
-    speed_pot = Item("speed_pot", player)
-    strength_pot = Item("strength_pot", player)
-    heal_pot = Item("heal_pot", player)
-    speed_pot.use_item()
-    strength_pot.use_item()
-    heal_pot.use_item()
-    heal_pot.use_item()
-
-
-def skill_3(player, sprite_groups, inv):
-    """SKILL 3: GETS THREE POTIONS (IN INVENTORY)"""
-    speed_pot = Item("speed_pot", player)
-    strength_pot = Item("strength_pot", player)
-    heal_pot = Item("heal_pot", player)
-    player.items.add(speed_pot)
-    inv.add_item(speed_pot)
-    player.items.add(strength_pot)
-    inv.add_item(strength_pot)
-    player.items.add(heal_pot)
-    inv.add_item(heal_pot)
-
-
 def update_dir(player: Entity, camera):
     """ UPDATES PLAYER DIRECTION ACCORDING TO
     MOUSE POS (0 = RIGHT, 1 = LEFT) """

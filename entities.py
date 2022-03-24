@@ -129,12 +129,25 @@ class Player(Entity):
         Entity.update(self, map_rect, sprite_groups)
 
     def use_skill(self, skill_id, sprite_groups, inv):
+        """
+        SKILL 1: CIRCLE OF AXES THROWN AROUND PLAYER
+        SKILL 2: BUFFS: GETS TEMP STRENGTH, TEMP SPEED AND INSTANT HEAL
+        SKILL 3: GETS THREE POTIONS (INSERTS TO INVENTORY)
+
+        ONLY SENDS TYPE OF SKILL TO SERVER TO MINIMIZE PACKET TRAFFIC
+        """
+
+        # CHECK WHICH SKILL BY ID:
         if skill_id == 1:
             vect = pg.math.Vector2(0, 1)
             for i in range(0, 9):
+                # CIRCLE OF AXES:
+
                 axe = Projectile("axe", self, vect, [sprite_groups["all"], sprite_groups["projectiles"]], send_update=False)
                 vect = vect.rotate(45)
         elif skill_id == 2:
+            # BUFFS USING (INSTANTLY USED) ITEMS:
+
             speed_pot = Item("speed_pot", self)
             strength_pot = Item("strength_pot", self)
             heal_pot = Item("heal_pot", self)
@@ -143,6 +156,8 @@ class Player(Entity):
             heal_pot.use_item(send_update=False)
             heal_pot.use_item(send_update=False)
         elif skill_id == 3:
+            # GET POTIONS IN INVENTORY:
+
             speed_pot = Item("speed_pot", self)
             strength_pot = Item("strength_pot", self)
             heal_pot = Item("heal_pot", self)
