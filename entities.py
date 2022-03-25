@@ -9,12 +9,12 @@ from settings import *
 
 
 class Entity(pg.sprite.Sprite):
-    def __init__(self, pos, sprite_groups: Iterable[pg.sprite.Group], animations, walk_speed, anim_speed,
-                 auto_move=False, id_: int = None):
+    def __init__(self, pos, sprite_groups: Iterable[pg.sprite.Group], animations, walk_speed, anim_speed, id_: int,
+                 auto_move=False):
         self.groups = sprite_groups
         pg.sprite.Sprite.__init__(self, *self.groups)
         # self.groups[0]: all sprites, self.groups[1]: entity sprites
-        self.id = id_ if id_ is not None else random.randint(0, 1000000)
+        self.id = id_
         self.items = pg.sprite.Group()
         self.walk_speed = walk_speed
         self.anim_speed = anim_speed
@@ -123,8 +123,8 @@ class Entity(pg.sprite.Sprite):
 
 
 class Player(Entity):
-    def __init__(self, pos, sprite_groups, animations, walk_speed, anim_speed):
-        Entity.__init__(self, pos, sprite_groups, animations, walk_speed, anim_speed)
+    def __init__(self, pos, sprite_groups, animations, walk_speed, anim_speed, id_):
+        Entity.__init__(self, pos, sprite_groups, animations, walk_speed, anim_speed, id_)
 
     def update(self, map_rect, sprite_groups):
         Entity.update(self, map_rect, sprite_groups)
@@ -242,7 +242,6 @@ class Item(pg.sprite.Sprite):
         self.image = pg.image.load('graphics/items/' + item_type + ".png")
         self.rect = self.image.get_rect()
         self.duration = 0  # duration of item's effect to last
-        self.id = 0  # TODO - this is only temporary
 
     def use_item(self, send_update=True):
         """" USES ITEM. FOR EACH ITEM EXISTS A SPECIAL EFFECT AND DURATION"""
@@ -264,7 +263,7 @@ class Item(pg.sprite.Sprite):
             self.owner.health = 100
 
         if isinstance(self.owner, MainPlayer) and send_update:
-            self.owner.client.send_update('use_item', {'id': self.owner.id, 'item_id': self.id})
+            self.owner.client.send_update('use_item', {'id': self.owner.id, 'item_type': self.item_type})
 
     def update(self):
         # DECREASE DURATION IN EACH TICK

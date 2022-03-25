@@ -1,10 +1,48 @@
 import json
 import logging
+import random
 import socket
 import threading
 import time
+from dataclasses import dataclass
+from typing import Tuple, List, Dict
 
 import settings
+
+
+class MyJSONEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, (Entity, Item, Projectile)):
+            return o.__dict__
+        return super(MyJSONEncoder, self).default(o)
+
+
+@dataclass
+class Entity:
+    id: int
+    start_pos: Tuple[int, int]
+    end_pos: Tuple[int, int]
+    t0: int
+    health: int
+
+
+@dataclass
+class Item:
+    item_type: str
+    t0: int
+
+
+@dataclass
+class Player(Entity):
+    items: List[Item]
+    username: str
+
+
+@dataclass
+class Projectile:
+    target: Tuple[int, int]
+    type: str
+    attacker_id: int
 
 
 class Server:
@@ -12,31 +50,37 @@ class Server:
         self.socket = sock
         self.clients = []
 
-        self.entities = {}
+        self.players: Dict[int, Player] = {}
+        self.projectiles: List[Projectile] = []
         self.updates = []
 
         logging.debug(f'server listening at: {self.socket.getsockname()}')
 
     def connect(self, data, address):
-        self.clients.append(address)
-        entity = data['entity']
+        player = Player(id=random.randint(0, 99999), start_pos=(1400, 1360), end_pos=(1400, 1360),
+                        health=100, items=[], t0=0, username=data['username'])
+        self.updates.append({'cmd': 'player_enters', 'player': player})
 
-        data = json.dumps(
-            {'cmd': 'connect', 'id': entity['id'], 'entities': list(self.entities.values()), 'projectiles': []})
-        data = data.encode() + b'\n'
+        data = json.dumps({
+            'cmd': 'init',
+            'main_player': player,
+            'players': list(self.players.values()),
+            'projectiles': self.projectiles
+        }, cls=MyJSONEncoder).encode() + b'\n'
         self.socket.sendto(data, address)
 
-        self.entities[entity['id']] = entity
-        self.updates.append({'cmd': 'new', 'entity': entity})
+        self.clients.append(address)
+        self.players[player.id] = player
 
-        logging.debug(f'new client connected: {self.clients=}, {self.entities=}')
+        logging.debug(f'new client connected: {address=}, {player=}')
 
     def disconnect(self, data, address):
         self.clients.remove(address)
-        del self.entities[data['id']]
-        self.updates.append(data)
 
-        logging.debug(f'client disconnected: {self.clients=}, {self.entities=}')
+        del self.players[data['id']]
+        self.updates.append({'cmd': 'player_leaves', 'id': data['id']})
+
+        logging.debug(f'client disconnected: {address=}, {data=}')
 
     def send_data(self, data):
         for addr in self.clients:
@@ -44,6 +88,9 @@ class Server:
                 self.socket.sendto(data, addr)
             except Exception:
                 logging.exception(f"can't send data to client: {addr=}, {data=}")
+
+    def handle_update(self, data, address):
+        self.updates.append(data)
 
     def receive_packets(self):
         while True:
@@ -58,12 +105,12 @@ class Server:
                 elif data["cmd"] == "disconnect":
                     self.disconnect(data=data, address=address)
                 else:
-                    self.updates.append(data)
+                    self.handle_update(data=data, address=address)
             except Exception:
                 logging.exception('exception while handling request')
 
     def send_updates(self):
-        data = json.dumps({'cmd': 'update', 'updates': self.updates}).encode() + b'\n'
+        data = json.dumps({'cmd': 'update', 'updates': self.updates}, cls=MyJSONEncoder).encode() + b'\n'
         self.updates.clear()
         self.send_data(data)
 

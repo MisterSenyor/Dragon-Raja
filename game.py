@@ -144,6 +144,8 @@ def create_enemies(sprite_groups, mob_anims):
 
 
 def run():
+    logging.basicConfig(level=logging.DEBUG)
+
     clock = pg.time.Clock()
     screen = pg.display.set_mode((WIDTH, HEIGHT))
 
@@ -178,11 +180,11 @@ def run():
     port = PORT if len(sys.argv) == 1 else int(sys.argv[1])
     sock.bind((IP, port))
     sock_client = client.Client(sock=sock, server=(SERVER_IP, SERVER_PORT), sprite_groups=sprite_groups,
-                                player_animations=player_anims, player_anim_speed=5)
+                                player_animations=player_anims, player_anim_speed=5, player_walk_speed=5)
+    sock_client.init()
     threading.Thread(target=sock_client.receive_updates).start()
 
-    player = MainPlayer(sock_client, (1400, 1360),
-                        [sprite_groups["all"], sprite_groups["entity"], sprite_groups["players"]], player_anims, 5, 5)
+    player = sock_client.main_player
     create_enemies(sprite_groups, mob_anims)
 
     # SETTING UP MAP
@@ -221,9 +223,6 @@ def run():
     player.items.add(speed_pot)
     inv.add_item(speed_pot)
 
-    sock_client.send_update('connect', {
-        'entity': {'id': player.id, 'pos': player.rect.topleft, 'walk_speed': player.walk_speed,
-                   'items': [{'id': item.id, 'type': item.item_type} for item in player.items]}})
     chat = Chat()
     chat.add_line("press t to chat")
     while running:
