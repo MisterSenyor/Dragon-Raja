@@ -25,6 +25,24 @@ class Entity:
     t0: int
     health: int
 
+    def move(self, target: Tuple[int, int], t: int = None):
+        t = t if t is not None else time.time_ns()
+        curr_pos = self.get_pos(t)
+        self.start_pos, self.end_pos = curr_pos, target
+        self.t0 = t
+
+    def get_pos(self, t: int = None):
+        t = t if t is not None else time.time_ns()
+        dist = ((self.end_pos[0] - self.start_pos[0]) ** 2 + (self.end_pos[1] - self.start_pos[1]) ** 2) ** 0.5
+        if dist == 0:
+            return self.start_pos
+        total_time = dist / self.get_walk_speed()
+        p = (t - self.t0) / total_time
+        return self.end_pos[0] * p + self.start_pos[0] * (1 - p), self.end_pos[1] * p + self.start_pos[1] * (1 - p)
+
+    def get_walk_speed(self):
+        return 5
+
 
 @dataclass
 class Item:
@@ -90,6 +108,10 @@ class Server:
                 logging.exception(f"can't send data to client: {addr=}, {data=}")
 
     def handle_update(self, data, address):
+        cmd = data['cmd']
+        player = self.players[data['id']]
+        if cmd == 'move':
+            player.move(data['pos'])
         self.updates.append(data)
 
     def receive_packets(self):
