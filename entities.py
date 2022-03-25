@@ -144,7 +144,8 @@ class Player(Entity):
             for i in range(0, 9):
                 # CIRCLE OF AXES:
 
-                axe = Projectile("axe", self, vect, [sprite_groups["all"], sprite_groups["projectiles"]], send_update=False)
+                axe = Projectile("axe", self, vect, [sprite_groups["all"], sprite_groups["projectiles"]],
+                                 send_update=False)
                 vect = vect.rotate(45)
         elif skill_id == 2:
             # BUFFS USING (INSTANTLY USED) ITEMS:
@@ -234,6 +235,7 @@ class Mob(Entity):
 
 class Item(pg.sprite.Sprite):
     """" ITEM CLASS, GETS ITEM TYPE, OWNER (ENTITY)"""
+
     def __init__(self, item_type, owner):
         self.group = owner.items
         pg.sprite.Sprite.__init__(self, self.group)
@@ -394,11 +396,19 @@ class Projectile(pg.sprite.Sprite):
 
 
 class Chat(pg.sprite.Sprite):
-    def __init__(self, lines = collections.deque([])):
+    """"
+    CHAT CLASS:
+    LINES WRITTEN IN TOPLEFT OF SCREEN
+    USING FIRST IN FIRST OUT QUEUE FOR LINES
+    CHAT MAY BE INITIALIZED WITH AN ALREADY MADE QUEUE OF LINES,
+    OTHERWISE STARTS AS EMPTY CHAT
+    """
+
+    def __init__(self, lines=collections.deque([])):
         pg.sprite.Sprite.__init__(self)
         self.font = pg.font.Font(pg.font.get_default_font(), 25)
         self.lines = lines
-        self.cur_typed = '' # LINE BEING TYPED BY CLIENT
+        self.cur_typed = ''  # LINE BEING TYPED BY CLIENT
         self.color = BLACK
         self.is_pressed = False  # WHETHER BUTTON TO CHAT HAS BEEN PRESSED OR NOT
 
@@ -408,11 +418,13 @@ class Chat(pg.sprite.Sprite):
             self.lines.append(line)
         else:
             # IF FULL, REMOVE LAST LINE AND INSERT NEW LINE AS FIRST
-            self.lines.pop()
-            self.lines.appendleft(line)
+            self.lines.popleft()  # FIRST IN FIRST OUT
+            self.lines.append(line)  # ADD NEW LINE
 
     def send_line(self, line):
+        # ADD LINE TO OWN CHAT:
         self.add_line(line)
+
         # TODO: SEND LINE TO SERVER
         pass
 
@@ -428,8 +440,3 @@ class Chat(pg.sprite.Sprite):
         if self.cur_typed != '':
             text = self.font.render(self.cur_typed, True, self.color)
             screen.blit(text, (0, count * 20))
-
-
-
-
-
