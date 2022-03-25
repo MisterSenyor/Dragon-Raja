@@ -7,6 +7,8 @@ import client
 from Tilemap import *
 from animated_sprite import *
 from entities import *
+import logging
+import collections
 
 pg.init()
 
@@ -21,7 +23,7 @@ def update_dir(player: Entity, camera):
         player.direction = 1
 
 
-def handle_keyboard(player, inv, camera, key, sprite_groups):
+def handle_keyboard(player, inv, camera, key, chat, sprite_groups):
     if key == 120:  # X KEY
         update_dir(player, camera)
         player.melee_attack()
@@ -36,7 +38,6 @@ def handle_keyboard(player, inv, camera, key, sprite_groups):
     elif key == 99:  # C KEY
         # GET VECTOR FOR PROJECTILE:
         vect = pg.math.Vector2(pg.mouse.get_pos()[0] - WIDTH // 2, HEIGHT // 2 - pg.mouse.get_pos()[1])
-        # arrow = Projectile("arrow", player, vect, sprite_groups)
         arrow = Projectile("arrow", player, vect, [sprite_groups["all"], sprite_groups["projectiles"]])
 
         update_dir(player, camera)
@@ -48,6 +49,31 @@ def handle_keyboard(player, inv, camera, key, sprite_groups):
             # USE ITEM:
             item.use_item()
             inv.remove_item(inv.cur_slot)
+
+    elif key == 103:  # G KEY
+        player.use_skill(1, sprite_groups, inv)
+
+    elif key == 116:  # T KEY - CHAT
+        chat.is_pressed = True
+
+
+def handle_chat(chat, key):
+    if key == 27:  # ESCAPE
+        chat.cur_typed = ''
+        chat.is_pressed = False
+        return
+    elif key == 8 or key == 127:  # BACKSPACE OR DELETE
+        chat.cur_typed = chat.cur_typed[:-1]
+        return
+    elif key == 13:
+        chat.send_line(chat.cur_typed)
+        chat.cur_typed = ''
+        chat.is_pressed = False
+    else:
+        try:
+            chat.cur_typed += chr(key)
+        except Exception:
+            logging.exception('exception while handling update')
 
 
 def handle_mouse(player, event, inv, camera):
@@ -72,12 +98,16 @@ def handle_mouse(player, event, inv, camera):
         return
 
 
-def events(player, inv, camera, sprite_groups):
+def events(player, inv, camera, chat, sprite_groups):
     for event in pg.event.get():
         if event.type == pg.QUIT:
             return False
+        if chat.is_pressed:
+            if event.type == pg.KEYDOWN:
+                handle_chat(chat, event.key)
+            return True
         if event.type == pg.KEYDOWN:
-            handle_keyboard(player, inv, camera, event.key, sprite_groups)
+            handle_keyboard(player, inv, camera, event.key, chat, sprite_groups)
         if event.type == pg.MOUSEBUTTONDOWN:
             handle_mouse(player, event, inv, camera)
     return True
@@ -91,7 +121,7 @@ def update(all_sprites, player, camera, map_rect, sprite_groups):
     camera.update(player)
 
 
-def draw(screen, all_sprites, map_img, map_rect, inv, camera):
+def draw(screen, all_sprites, map_img, map_rect, inv, chat, camera):
     screen.fill(BGCOLOR)
 
     screen.blit(map_img, camera.apply_rect(map_rect))
@@ -100,14 +130,17 @@ def draw(screen, all_sprites, map_img, map_rect, inv, camera):
         screen.blit(sprite.image, camera.apply(sprite))
         sprite.draw(screen, camera)
     inv.render(screen)  # RENDER INVENTORY
+    chat.update(screen)
     pg.display.update()
 
 
 def create_enemies(sprite_groups, mob_anims):
+    return
     mobs = []
     for i in range(0, 100):
         mobs.append(
-            Mob((randint(0, 12000), randint(0, 7600)), [sprite_groups["all"], sprite_groups["entity"]], choice(mob_anims), 2, 15))
+            Mob((randint(0, 12000), randint(0, 7600)), [sprite_groups["all"], sprite_groups["entity"]],
+                choice(mob_anims), 2, 15))
 
 
 def run():
@@ -124,7 +157,6 @@ def run():
         "players": players_sprites,
         "projectiles": projectile_sprites
     }
-
 
     player_anims = {
         'idle': AnimatedSprite('graphics/Knight/KnightIdle_strip.png', 15, True),
@@ -149,7 +181,8 @@ def run():
                                 player_animations=player_anims, player_anim_speed=5)
     threading.Thread(target=sock_client.receive_updates).start()
 
-    player = MainPlayer(sock_client, (1400, 1360), [sprite_groups["all"], sprite_groups["entity"], sprite_groups["players"]], player_anims, 5, 5)
+    player = MainPlayer(sock_client, (1400, 1360),
+                        [sprite_groups["all"], sprite_groups["entity"], sprite_groups["players"]], player_anims, 5, 5)
     create_enemies(sprite_groups, mob_anims)
 
     # SETTING UP MAP
@@ -182,7 +215,6 @@ def run():
     player.items.add(strength_pot)
     inv.add_item(strength_pot)
 
-
     player.items.add(speed_pot)
     inv.add_item(speed_pot)
 
@@ -192,12 +224,12 @@ def run():
     sock_client.send_update('connect', {
         'entity': {'id': player.id, 'pos': player.rect.topleft, 'walk_speed': player.walk_speed,
                    'items': [{'id': item.id, 'type': item.item_type} for item in player.items]}})
-
-    player.health = 50
+    chat = Chat()
+    chat.add_line("press t to chat")
     while running:
-        running = events(player, inv, camera, sprite_groups)
+        running = events(player, inv, camera, chat, sprite_groups)
         update(all_sprites, player, camera, map_rect, sprite_groups)
-        draw(screen, sprite_groups["all"], map_img, map_rect, inv, camera)
+        draw(screen, sprite_groups["all"], map_img, map_rect, inv, chat, camera)
         clock.tick(FPS)
 
     sock_client.send_update('disconnect', {'id': player.id})

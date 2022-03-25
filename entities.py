@@ -4,6 +4,7 @@ from typing import Iterable
 import pygame as pg
 
 import client
+import collections
 from settings import *
 
 
@@ -128,6 +129,46 @@ class Player(Entity):
     def update(self, map_rect, sprite_groups):
         Entity.update(self, map_rect, sprite_groups)
 
+    def use_skill(self, skill_id, sprite_groups, inv):
+        """
+        SKILL 1: CIRCLE OF AXES THROWN AROUND PLAYER
+        SKILL 2: BUFFS: GETS TEMP STRENGTH, TEMP SPEED AND INSTANT HEAL
+        SKILL 3: GETS THREE POTIONS (INSERTS TO INVENTORY)
+
+        ONLY SENDS TYPE OF SKILL TO SERVER TO MINIMIZE PACKET TRAFFIC
+        """
+
+        # CHECK WHICH SKILL BY ID:
+        if skill_id == 1:
+            vect = pg.math.Vector2(0, 1)
+            for i in range(0, 9):
+                # CIRCLE OF AXES:
+
+                axe = Projectile("axe", self, vect, [sprite_groups["all"], sprite_groups["projectiles"]], send_update=False)
+                vect = vect.rotate(45)
+        elif skill_id == 2:
+            # BUFFS USING (INSTANTLY USED) ITEMS:
+
+            speed_pot = Item("speed_pot", self)
+            strength_pot = Item("strength_pot", self)
+            heal_pot = Item("heal_pot", self)
+            speed_pot.use_item(send_update=False)
+            strength_pot.use_item(send_update=False)
+            heal_pot.use_item(send_update=False)
+            heal_pot.use_item(send_update=False)
+        elif skill_id == 3:
+            # GET POTIONS IN INVENTORY:
+
+            speed_pot = Item("speed_pot", self)
+            strength_pot = Item("strength_pot", self)
+            heal_pot = Item("heal_pot", self)
+            self.items.add(speed_pot)
+            inv.add_item(speed_pot)
+            self.items.add(strength_pot)
+            inv.add_item(strength_pot)
+            self.items.add(heal_pot)
+            inv.add_item(heal_pot)
+
 
 class MainPlayer(Player):
     def __init__(self, sock_client: 'client.Client', *args, **kwargs):
@@ -143,6 +184,11 @@ class MainPlayer(Player):
         super(MainPlayer, self).melee_attack()
         if send_update:
             self.client.send_update('attack', {'id': self.id})
+
+    def use_skill(self, skill_id, sprite_groups, inv, send_update=True):
+        super(MainPlayer, self).use_skill(skill_id, sprite_groups, inv)
+        if send_update:
+            self.client.send_update('use_skill', {'id': self.id, 'skill_id': skill_id})
 
 
 class Mob(Entity):
@@ -188,7 +234,6 @@ class Mob(Entity):
 
 class Item(pg.sprite.Sprite):
     """" ITEM CLASS, GETS ITEM TYPE, OWNER (ENTITY)"""
-
     def __init__(self, item_type, owner):
         self.group = owner.items
         pg.sprite.Sprite.__init__(self, self.group)
@@ -269,7 +314,7 @@ class Inventory:
         # DRAW OUTLINE AROUND CURRENT SLOT:
         screen.blit(self.slot_img, (self.rect.topleft[0] + self.cur_slot * 40, self.rect.topleft[1]))
 
-    def add_item(self, item: Item):
+    def add_item(self, item: Item, send_updates=False):
         """" ADD ITEM TO FIRST EMPTY SLOT"""
         for i in range(0, 15):
             if self.slots[i] == 0:
@@ -346,3 +391,45 @@ class Projectile(pg.sprite.Sprite):
 
     def draw(self, screen, camera):
         screen.blit(self.image, camera.apply(self))
+
+
+class Chat(pg.sprite.Sprite):
+    def __init__(self, lines = collections.deque([])):
+        pg.sprite.Sprite.__init__(self)
+        self.font = pg.font.Font(pg.font.get_default_font(), 25)
+        self.lines = lines
+        self.cur_typed = '' # LINE BEING TYPED BY CLIENT
+        self.color = BLACK
+        self.is_pressed = False  # WHETHER BUTTON TO CHAT HAS BEEN PRESSED OR NOT
+
+    def add_line(self, line: str):
+        # CHECK IF CHAT NOT FULL:
+        if len(self.lines) < 8:
+            self.lines.append(line)
+        else:
+            # IF FULL, REMOVE LAST LINE AND INSERT NEW LINE AS FIRST
+            self.lines.pop()
+            self.lines.appendleft(line)
+
+    def send_line(self, line):
+        self.add_line(line)
+        # TODO: SEND LINE TO SERVER
+        pass
+
+    def update(self, screen):
+        # BLIT EVERY LINE TOP LEFT OF SCREEN:
+        count = 0
+        for line in self.lines:
+            text = self.font.render(line, True, self.color)
+            screen.blit(text, (0, count * 20))
+            count += 1
+
+        # PRINT CURRENTLY TYPED LINE IF THERE IS ONE:
+        if self.cur_typed != '':
+            text = self.font.render(self.cur_typed, True, self.color)
+            screen.blit(text, (0, count * 20))
+
+
+
+
+
