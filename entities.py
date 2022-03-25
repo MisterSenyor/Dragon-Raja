@@ -1,3 +1,4 @@
+import logging
 import random
 from typing import Iterable
 
@@ -411,6 +412,7 @@ class Chat(pg.sprite.Sprite):
         self.cur_typed = ''  # LINE BEING TYPED BY CLIENT
         self.color = BLACK
         self.is_pressed = False  # WHETHER BUTTON TO CHAT HAS BEEN PRESSED OR NOT
+        self._char_lim = 20
 
     def add_line(self, line: str):
         # CHECK IF CHAT NOT FULL:
@@ -423,6 +425,9 @@ class Chat(pg.sprite.Sprite):
 
     def send_line(self, line):
         # ADD LINE TO OWN CHAT:
+        if len(line) > self._char_lim:
+            logging.debug(f'unable to send line, character limit reached')
+            return
         self.add_line(line)
 
         # TODO: SEND LINE TO SERVER

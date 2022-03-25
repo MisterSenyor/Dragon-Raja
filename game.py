@@ -65,15 +65,18 @@ def handle_chat(chat, key):
     elif key == 8 or key == 127:  # BACKSPACE OR DELETE
         chat.cur_typed = chat.cur_typed[:-1]
         return
-    elif key == 13:
+    elif key == 13:  # ENTER
         chat.send_line(chat.cur_typed)
         chat.cur_typed = ''
         chat.is_pressed = False
     else:
-        try:
-            chat.cur_typed += chr(key)
-        except Exception:
-            logging.exception('exception while handling update')
+        # CHECK IF MAX CHAR LIM REACHED:
+        if len(chat.cur_typed) < chat._char_lim:
+            try:
+                # ADD NEW LETTER TO TYPED LINE
+                chat.cur_typed += chr(key)
+            except ValueError:
+                logging.error('exception while converting from ascii')
 
 
 def handle_mouse(player, event, inv, camera):
