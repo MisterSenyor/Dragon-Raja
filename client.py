@@ -1,5 +1,4 @@
 import json
-import logging
 from typing import Dict
 
 import pygame
@@ -62,8 +61,6 @@ class Client:
             logging.debug(f'init data received not from server: {address=}, {self.server=}')
         try:
             data = json.loads(msg)
-            logging.debug(f'{[player.id for player in self.sprite_groups["players"].sprites()]}')
-
             logging.debug(f'init data received: {data=}')
             if data['cmd'] == 'init':
                 self.main_player = self.create_main_player(data['main_player'])
@@ -71,7 +68,6 @@ class Client:
                     self.create_player(player_data)
                 for projectile_data in data['projectiles']:
                     self.create_projectile(projectile_data)
-            logging.debug(f'{[player.id for player in self.sprite_groups["players"].sprites()]}')
         except Exception:
             logging.exception(f'exception in init')
 
@@ -86,7 +82,6 @@ class Client:
 
         if cmd == 'player_enters':
             if update['player']['id'] not in player_ids:
-                logging.debug(f'{player_ids=}')
                 self.create_player(update['player'])
         elif cmd == 'projectile' and update['id'] != self.main_player.id:
             self.create_projectile(update['projectile'])

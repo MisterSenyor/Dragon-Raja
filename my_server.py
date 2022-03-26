@@ -38,10 +38,12 @@ class Entity:
             return self.start_pos
         total_time = dist / self.get_walk_speed()
         p = (t - self.t0) / total_time
+        if p > 1:
+            return self.end_pos
         return self.end_pos[0] * p + self.start_pos[0] * (1 - p), self.end_pos[1] * p + self.start_pos[1] * (1 - p)
 
     def get_walk_speed(self):
-        return 5
+        return 0.005
 
 
 @dataclass
