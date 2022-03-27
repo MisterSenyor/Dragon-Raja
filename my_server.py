@@ -21,7 +21,7 @@ class MyJSONEncoder(json.JSONEncoder):
 
 
 @dataclass
-class Entity:
+class Entity(abc.ABC):
     id: int
     start_pos: Tuple[int, int]
     end_pos: Tuple[int, int]
@@ -39,15 +39,17 @@ class Entity:
         dist = ((self.end_pos[0] - self.start_pos[0]) ** 2 + (self.end_pos[1] - self.start_pos[1]) ** 2) ** 0.5
         if dist == 0:
             return self.start_pos
-        total_time = dist / self.get_speed()
+        norm_speed = 100 * self.get_speed() * 10 ** -9  # speed / 1 game tick = speed / (100 * 10 ** -9 nanosecs)
+        total_time = dist / norm_speed
         p = (t - self.t0) / total_time
         if p > 1:
             return self.end_pos
         return round(self.end_pos[0] * p + self.start_pos[0] * (1 - p)), round(
             self.end_pos[1] * p + self.start_pos[1] * (1 - p))
 
+    @abc.abstractmethod
     def get_speed(self):
-        return 100 * 5 * 10 ** -9
+        pass
 
 
 @dataclass
@@ -64,6 +66,9 @@ class Player(Entity):
     def get_damage(self):
         return 20
 
+    def get_speed(self):
+        return 5
+
 
 @dataclass
 class Projectile:
@@ -76,12 +81,13 @@ class Projectile:
     def get_pos(self, t: int = None):
         t = t if t is not None else time.time_ns()
         dist = (self.target[0] ** 2 + self.target[1] ** 2) ** 0.5
-        total_time = dist / self.get_speed()
+        norm_speed = 100 * self.get_speed() * 10 ** -9  # speed / 1 game tick = speed / (100 * 10 ** -9 nanosecs)
+        total_time = dist / norm_speed
         p = (t - self.t0) / total_time
         return round(self.target[0] * p + self.start_pos[0]), round(self.target[1] * p + self.start_pos[1])
 
     def get_speed(self):
-        return 10 * 10 * 10 ** -9
+        return 10
 
     def get_damage(self):
         return 20
