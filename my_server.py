@@ -6,7 +6,7 @@ import socket
 import threading
 import time
 from dataclasses import dataclass
-from typing import Tuple, List, Dict
+from typing import Tuple, List, Dict, Optional
 
 from scipy.spatial import KDTree
 
@@ -21,12 +21,25 @@ class MyJSONEncoder(json.JSONEncoder):
 
 
 @dataclass
+class Item:
+    item_type: str
+    t0: int
+
+
+@dataclass
 class Entity(abc.ABC):
-    id: int
+    id: Optional[int]
     start_pos: Tuple[int, int]
-    end_pos: Tuple[int, int]
+    end_pos: Optional[Tuple[int, int]]
     t0: int
     health: int
+    items: List[Item]
+
+    def __post_init__(self):
+        if self.id is None:
+            self.id = random.randint(0, 99999)
+        if self.end_pos is None:
+            self.end_pos = tuple(self.start_pos)
 
     def move(self, pos: Tuple[int, int], t: int = None):
         t = t if t is not None else time.time_ns()
@@ -53,14 +66,7 @@ class Entity(abc.ABC):
 
 
 @dataclass
-class Item:
-    item_type: str
-    t0: int
-
-
-@dataclass
 class Player(Entity):
-    items: List[Item]
     username: str
 
     def get_damage(self):
@@ -93,20 +99,51 @@ class Projectile:
         return 20
 
 
+@dataclass
+class Mob(Entity):
+    def get_speed(self):
+        return 2
+
+
 class Server:
     def __init__(self, sock: socket.socket):
         self.socket = sock
         self.clients = []
 
         self.players: Dict[int, Player] = {}
+        self.mobs: Dict[int, Mob] = {}
         self.projectiles: List[Projectile] = []
         self.updates = []
         self.attacking_players: List[int] = []  # attacking players' ids
 
+        self.generate_mobs(2)
+
         logging.debug(f'server listening at: {self.socket.getsockname()}')
 
+    def generate_mobs(self, count):
+        for _ in range(count):
+            m = Mob(id=None, start_pos=(random.randint(1000, 2000), random.randint(1000, 2000)), end_pos=None,
+                    health=100, t0=0, items=[])
+            self.mobs[m.id] = m
+
+    def update_mobs(self):
+        t = time.time_ns()
+        if random.random() < 0.01:
+            m = random.choice(list(self.mobs.values()))
+            pos = m.get_pos(t)
+            m.move(t=t, pos=(pos[0] + random.randint(100, 500), pos[1] + random.randint(100, 500)))
+            logging.debug(f'mob moved: {m=}')
+            self.updates.append({'cmd': 'move', 'pos': m.end_pos, 'id': m.id})
+        if random.random() < 0.01:
+            m = random.choice(list(self.mobs.values()))
+            target = random.randint(-100, 100), random.randint(-100, 100)
+            proj = Projectile(t0=t, start_pos=m.get_pos(t), target=target, type='axe', attacker_id=m.id)
+            self.projectiles.append(proj)
+            logging.debug(f'mob shot projectile: {m=}, {proj=}')
+            self.updates.append({'cmd': 'projectile', 'projectile': proj, 'id': m.id})
+
     def connect(self, data, address):
-        player = Player(id=random.randint(0, 99999), start_pos=(1400, 1360), end_pos=(1400, 1360),
+        player = Player(id=None, start_pos=(1400, 1360), end_pos=None,
                         health=100, items=[], t0=0, username=data['username'])
         self.updates.append({'cmd': 'player_enters', 'player': player})
 
@@ -114,8 +151,10 @@ class Server:
             'cmd': 'init',
             'main_player': player,
             'players': list(self.players.values()),
+            'mobs': list(self.mobs.values()),
             'projectiles': self.projectiles
         }, cls=MyJSONEncoder).encode() + b'\n'
+        print(len(data))
         self.socket.sendto(data, address)
 
         self.clients.append(address)
@@ -138,32 +177,36 @@ class Server:
             except Exception:
                 logging.exception(f"can't send data to client: {addr=}, {data=}")
 
-    def deal_damage(self, player: Player, damage: int):
-        player.health -= damage
-        if player.health < 0:
-            del self.players[player.id]
-            logging.debug(f'player died: {player=}')
+    def deal_damage(self, entity: Entity, damage: int):
+        entity.health -= damage
+        if entity.health < 0:
+            if isinstance(entity, Player):
+                del self.players[entity.id]
+            elif isinstance(entity, Mob):
+                del self.mobs[entity.id]
+            logging.debug(f'entity died: {entity=}')
 
     def handle_collision(self, o1, o2):
-        if isinstance(o1, Projectile) and isinstance(o2, Player):
+        if isinstance(o1, Projectile) and isinstance(o2, Entity):
             self.handle_collision(o2, o1)
-        elif isinstance(o1, Player) and isinstance(o2, Projectile):
-            player, proj = o1, o2
-            if proj.attacker_id != player.id:
-                logging.debug(f'player-projectile collision: {player=}, {proj=}')
-                logging.debug(f'{player.get_pos()=}, {proj.get_pos()=}')
+        if isinstance(o1, Entity) and isinstance(o2, Projectile):
+            entity, proj = o1, o2
+            if proj.attacker_id != entity.id:
+                logging.debug(f'entity-projectile collision: {entity=}, {proj=}')
+                logging.debug(f'{entity.get_pos()=}, {proj.get_pos()=}')
                 self.projectiles.remove(proj)
-                self.deal_damage(player, proj.get_damage())
-        elif isinstance(o1, Player) and isinstance(o2, Player):
+                self.deal_damage(entity, proj.get_damage())
+        if isinstance(o1, Player) and isinstance(o2, Entity):
             if o1.id in self.attacking_players:
                 self.deal_damage(o2, o1.get_damage())
+        if isinstance(o1, Entity) and isinstance(o2, Player):
             if o2.id in self.attacking_players:
                 self.deal_damage(o1, o2.get_damage())
         self.attacking_players = []
 
     def collisions_handler(self):
         t = time.time_ns()
-        moving_objs = list(self.players.values()) + self.projectiles
+        moving_objs = list(self.players.values()) + list(self.mobs.values()) + self.projectiles
         if not moving_objs:
             return
         data = [o.get_pos(t) for o in moving_objs]
@@ -218,6 +261,7 @@ def main():
 
     while True:
         time.sleep(settings.UPDATE_TICK)
+        server.update_mobs()
         server.collisions_handler()
         server.send_updates()
 

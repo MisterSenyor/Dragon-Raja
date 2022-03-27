@@ -183,7 +183,8 @@ def run():
     port = PORT if len(sys.argv) == 1 else int(sys.argv[1])
     sock.bind((IP, port))
     sock_client = client.Client(sock=sock, server=(SERVER_IP, SERVER_PORT), sprite_groups=sprite_groups,
-                                player_animations=player_anims, player_anim_speed=5, player_walk_speed=5)
+                                player_animations=player_anims, mob_animations=mob_anims[0], player_anim_speed=5,
+                                player_walk_speed=5, mob_anim_speed=15, mob_walk_speed=2)
     sock_client.init()
     threading.Thread(target=sock_client.receive_updates).start()
 
