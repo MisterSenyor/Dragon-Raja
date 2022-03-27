@@ -153,7 +153,7 @@ class Server:
                     del self.players[player.id]
                     logging.debug(f'player died: {player=}')
 
-    def get_collisions(self):
+    def collisions_handler(self):
         t = time.time_ns()
         moving_objs: List[MovingObject] = list(self.players.values()) + self.projectiles
         if not moving_objs:
@@ -208,7 +208,7 @@ def main():
 
     while True:
         time.sleep(settings.UPDATE_TICK)
-        server.get_collisions()
+        server.collisions_handler()
         server.send_updates()
 
 
