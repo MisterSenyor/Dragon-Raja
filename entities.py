@@ -366,7 +366,7 @@ class Projectile(pg.sprite.Sprite):
 
         # X,Y AXIS SPEEDS:
         self._speed_x = (vect.x / vect.length()) * self._speed
-        self._speed_y = - (vect.y / vect.length()) * self._speed
+        self._speed_y = (vect.y / vect.length()) * self._speed
 
         self._i = 0  # ITERATION
 

@@ -30,14 +30,14 @@ def handle_keyboard(player, inv, camera, key, chat, sprite_groups):
 
     elif key == 122:  # Z key
         # GET VECTOR FOR PROJECTILE:
-        vect = pg.math.Vector2(pg.mouse.get_pos()[0] - WIDTH // 2, HEIGHT // 2 - pg.mouse.get_pos()[1])
+        vect = pg.math.Vector2(pg.mouse.get_pos()[0] - WIDTH // 2, pg.mouse.get_pos()[1] - HEIGHT // 2)
         axe = Projectile("axe", player, vect, [sprite_groups["all"], sprite_groups["projectiles"]])
 
         update_dir(player, camera)
 
     elif key == 99:  # C KEY
         # GET VECTOR FOR PROJECTILE:
-        vect = pg.math.Vector2(pg.mouse.get_pos()[0] - WIDTH // 2, HEIGHT // 2 - pg.mouse.get_pos()[1])
+        vect = pg.math.Vector2(pg.mouse.get_pos()[0] - WIDTH // 2, pg.mouse.get_pos()[1] - HEIGHT // 2)
         arrow = Projectile("arrow", player, vect, [sprite_groups["all"], sprite_groups["projectiles"]])
 
         update_dir(player, camera)

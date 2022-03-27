@@ -15,58 +15,36 @@ import settings
 
 class MyJSONEncoder(json.JSONEncoder):
     def default(self, o):
-        if isinstance(o, Projectile):
-            return {'type': o.type, 'target': o.target, 'attacker_id': o.attacker_id}
-        elif isinstance(o, Entity):
-            data = o.__dict__.copy()
-            data['end_pos'] = data.pop('target')
-            return data
-        elif isinstance(o, Item):
+        if isinstance(o, (Projectile, Entity, Item)):
             return o.__dict__
         return super(MyJSONEncoder, self).default(o)
 
 
 @dataclass
-class MovingObject(abc.ABC):
-    start_pos: Tuple[int, int]
-    t0: int
-    target: Tuple[int, int]
-
-    def get_movement_part(self, t: int = None):
-        t = t if t is not None else time.time_ns()
-        dist = ((self.target[0] - self.start_pos[0]) ** 2 + (self.target[1] - self.start_pos[1]) ** 2) ** 0.5
-        total_time = dist / self.get_speed()
-        return (t - self.t0) / total_time
-
-    def get_pos(self, t: int = None):
-        p = self.get_movement_part(t)
-        return round(self.target[0] * p + self.start_pos[0] * (1 - p)), round(
-            self.target[1] * p + self.start_pos[1] * (1 - p))
-
-    @abc.abstractmethod
-    def get_speed(self):
-        pass
-
-
-@dataclass
-class Entity(MovingObject):
+class Entity:
     id: int
+    start_pos: Tuple[int, int]
+    end_pos: Tuple[int, int]
+    t0: int
     health: int
 
-    def move(self, target: Tuple[int, int], t: int = None):
+    def move(self, pos: Tuple[int, int], t: int = None):
         t = t if t is not None else time.time_ns()
         curr_pos = self.get_pos(t)
-        self.start_pos, self.target = curr_pos, target
+        self.start_pos, self.end_pos = curr_pos, pos
         self.t0 = t
 
     def get_pos(self, t: int = None):
         t = t if t is not None else time.time_ns()
-        if self.target == self.start_pos:
+        dist = ((self.end_pos[0] - self.start_pos[0]) ** 2 + (self.end_pos[1] - self.start_pos[1]) ** 2) ** 0.5
+        if dist == 0:
             return self.start_pos
-        p = self.get_movement_part(t)
+        total_time = dist / self.get_speed()
+        p = (t - self.t0) / total_time
         if p > 1:
-            return self.target
-        return super(Entity, self).get_pos(t)
+            return self.end_pos
+        return round(self.end_pos[0] * p + self.start_pos[0] * (1 - p)), round(
+            self.end_pos[1] * p + self.start_pos[1] * (1 - p))
 
     def get_speed(self):
         return 100 * 5 * 10 ** -9
@@ -88,9 +66,19 @@ class Player(Entity):
 
 
 @dataclass
-class Projectile(MovingObject):
+class Projectile:
+    t0: int
+    start_pos: Tuple[int, int]
+    target: Tuple[int, int]
     type: str
     attacker_id: int
+
+    def get_pos(self, t: int = None):
+        t = t if t is not None else time.time_ns()
+        dist = (self.target[0] ** 2 + self.target[1] ** 2) ** 0.5
+        total_time = dist / self.get_speed()
+        p = (t - self.t0) / total_time
+        return round(self.target[0] * p + self.start_pos[0]), round(self.target[1] * p + self.start_pos[1])
 
     def get_speed(self):
         return 10 * 10 * 10 ** -9
@@ -112,7 +100,7 @@ class Server:
         logging.debug(f'server listening at: {self.socket.getsockname()}')
 
     def connect(self, data, address):
-        player = Player(id=random.randint(0, 99999), start_pos=(1400, 1360), target=(1400, 1360),
+        player = Player(id=random.randint(0, 99999), start_pos=(1400, 1360), end_pos=(1400, 1360),
                         health=100, items=[], t0=0, username=data['username'])
         self.updates.append({'cmd': 'player_enters', 'player': player})
 
@@ -150,14 +138,14 @@ class Server:
             del self.players[player.id]
             logging.debug(f'player died: {player=}')
 
-
-    def handle_collision(self, o1: MovingObject, o2: MovingObject):
+    def handle_collision(self, o1, o2):
         if isinstance(o1, Projectile) and isinstance(o2, Player):
             self.handle_collision(o2, o1)
         elif isinstance(o1, Player) and isinstance(o2, Projectile):
             player, proj = o1, o2
             if proj.attacker_id != player.id:
                 logging.debug(f'player-projectile collision: {player=}, {proj=}')
+                logging.debug(f'{player.get_pos()=}, {proj.get_pos()=}')
                 self.projectiles.remove(proj)
                 self.deal_damage(player, proj.get_damage())
         elif isinstance(o1, Player) and isinstance(o2, Player):
@@ -169,12 +157,12 @@ class Server:
 
     def collisions_handler(self):
         t = time.time_ns()
-        moving_objs: List[MovingObject] = list(self.players.values()) + self.projectiles
+        moving_objs = list(self.players.values()) + self.projectiles
         if not moving_objs:
             return
         data = [o.get_pos(t) for o in moving_objs]
         kd_tree = KDTree(data)
-        collisions = kd_tree.query_pairs(300)
+        collisions = kd_tree.query_pairs(100)
         for col in collisions:
             self.handle_collision(moving_objs[col[0]], moving_objs[col[1]])
 
