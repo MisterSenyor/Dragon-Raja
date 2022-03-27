@@ -83,6 +83,9 @@ class Player(Entity):
     items: List[Item]
     username: str
 
+    def get_damage(self):
+        return 20
+
 
 @dataclass
 class Projectile(MovingObject):
@@ -104,6 +107,7 @@ class Server:
         self.players: Dict[int, Player] = {}
         self.projectiles: List[Projectile] = []
         self.updates = []
+        self.attacking_players: List[int] = []  # attacking players' ids
 
         logging.debug(f'server listening at: {self.socket.getsockname()}')
 
@@ -140,18 +144,28 @@ class Server:
             except Exception:
                 logging.exception(f"can't send data to client: {addr=}, {data=}")
 
+    def deal_damage(self, player: Player, damage: int):
+        player.health -= damage
+        if player.health < 0:
+            del self.players[player.id]
+            logging.debug(f'player died: {player=}')
+
+
     def handle_collision(self, o1: MovingObject, o2: MovingObject):
         if isinstance(o1, Projectile) and isinstance(o2, Player):
             self.handle_collision(o2, o1)
-        if isinstance(o1, Player) and isinstance(o2, Projectile):
+        elif isinstance(o1, Player) and isinstance(o2, Projectile):
             player, proj = o1, o2
             if proj.attacker_id != player.id:
                 logging.debug(f'player-projectile collision: {player=}, {proj=}')
-                player.health -= proj.get_damage()
                 self.projectiles.remove(proj)
-                if player.health < 0:
-                    del self.players[player.id]
-                    logging.debug(f'player died: {player=}')
+                self.deal_damage(player, proj.get_damage())
+        elif isinstance(o1, Player) and isinstance(o2, Player):
+            if o1.id in self.attacking_players:
+                self.deal_damage(o2, o1.get_damage())
+            if o2.id in self.attacking_players:
+                self.deal_damage(o1, o2.get_damage())
+        self.attacking_players = []
 
     def collisions_handler(self):
         t = time.time_ns()
@@ -172,6 +186,8 @@ class Server:
             player.move(data['pos'])
         elif cmd == 'projectile':
             self.projectiles.append(Projectile(**data['projectile'], start_pos=player.get_pos(t), t0=t))
+        elif cmd == 'attack':
+            self.attacking_players.append(player.id)
         self.updates.append(data)
 
     def receive_packets(self):
