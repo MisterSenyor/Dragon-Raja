@@ -13,7 +13,6 @@ class Entity(pg.sprite.Sprite):
     def __init__(self, pos, sprite_groups: Iterable[pg.sprite.Group], animations, walk_speed, anim_speed, id_: int,
                  auto_move=False):
         self.groups = sprite_groups
-        pg.sprite.Sprite.__init__(self, *self.groups)
         # self.groups[0]: all sprites, self.groups[1]: entity sprites
         self.id = id_
         self.items = pg.sprite.Group()
@@ -35,6 +34,9 @@ class Entity(pg.sprite.Sprite):
         self.direction = 0
         self.animation_tick = 0
         self.health = 100
+
+        # add to sprite groups after all fields are initialized to avoid race conditions
+        pg.sprite.Sprite.__init__(self, *self.groups)
 
     def move(self, x, y, send_update=True):
         if self.status != 'attack':
@@ -174,8 +176,8 @@ class Player(Entity):
 
 class MainPlayer(Player):
     def __init__(self, sock_client: 'client.Client', *args, **kwargs):
-        super(MainPlayer, self).__init__(*args, **kwargs)
         self.client = sock_client
+        super(MainPlayer, self).__init__(*args, **kwargs)
 
     def move(self, x, y, send_update=True):
         super(MainPlayer, self).move(x, y)
@@ -239,12 +241,13 @@ class Item(pg.sprite.Sprite):
 
     def __init__(self, item_type, owner):
         self.group = owner.items
-        pg.sprite.Sprite.__init__(self, self.group)
         self.item_type = item_type
         self.owner = owner
         self.image = pg.image.load('graphics/items/' + item_type + ".png")
         self.rect = self.image.get_rect()
         self.duration = 0  # duration of item's effect to last
+
+        pg.sprite.Sprite.__init__(self, self.group)
 
     def use_item(self, send_update=True):
         """" USES ITEM. FOR EACH ITEM EXISTS A SPECIAL EFFECT AND DURATION"""
@@ -339,7 +342,6 @@ class Projectile(pg.sprite.Sprite):
 
     def __init__(self, proj_type, attacker: Entity, vect: pg.math.Vector2, sprite_groups, send_update=True):
         self.groups = sprite_groups
-        pg.sprite.Sprite.__init__(self, sprite_groups)
         # self.groups[0]: all sprites, self.groups[2]: projectile sprites
 
         self._start = attacker.rect.center
@@ -368,6 +370,9 @@ class Projectile(pg.sprite.Sprite):
 
         self._i = 0  # ITERATION
 
+        # add to sprite groups ONLY after all fields are initialized (to avoid race conditions with the game thread)
+        pg.sprite.Sprite.__init__(self, sprite_groups)
+
         # send update to server
         if isinstance(self.attacker, MainPlayer) and send_update:
             self.attacker.client.send_update(
@@ -388,6 +393,7 @@ class Projectile(pg.sprite.Sprite):
         # CHECK COLLISION WITH ENTITIES:
         for sprite in sprite_groups['entity']:  # groups[1] - all entities (players/mobs)
             if sprite is not self.attacker and pg.sprite.collide_rect(self, sprite):
+                logging.debug(f'player-projectile collision: {sprite.id=}, {sprite.health=}')
                 sprite.health -= self.damage
                 self.remove(self.groups)
 
