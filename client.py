@@ -1,10 +1,10 @@
-import json
 from typing import Dict
 
 import pygame
 
 from entities import *
 from network.utils import Address
+from utils import *
 
 
 def create_entity(cls, data, sprite_groups, walk_speed, animations, anim_speed, **kwargs):
@@ -66,14 +66,9 @@ class Client:
 
     def init(self):
         self.send_update('connect', {'username': 'ariel'})
-        while True:
-            msg, address = self.sock.recvfrom(1024)
-            if address == self.server:
-                break
-            logging.debug(f'init data received not from server: {address=}, {self.server=}')
+        data = recv_json(self.sock, self.server)
+        logging.debug(f'init data received: {data=}')
         try:
-            data = json.loads(msg)
-            logging.debug(f'init data received: {data=}')
             if data['cmd'] == 'init':
                 self.main_player = self.create_main_player(data['main_player'])
                 for player_data in data['players']:
@@ -115,16 +110,15 @@ class Client:
 
     def receive_updates(self):
         while True:
-            msg, address = self.sock.recvfrom(1024)
-            if address == self.server:
-                try:
-                    data = json.loads(msg.decode())
-                    cmd = data['cmd']
-                    if cmd == 'update':
-                        updates = data['updates']
-                        if updates:
-                            logging.debug(f'received updates: {updates=}')
-                        for update in updates:
-                            self.handle_update(update)
-                except Exception:
-                    logging.exception(f'exception while handling update: {msg=}, {address=}')
+            data = recv_json(self.sock, self.server)
+            logging.debug(f'received data: {data=}')
+            try:
+                cmd = data['cmd']
+                if cmd == 'update':
+                    updates = data['updates']
+                    if updates:
+                        logging.debug(f'received updates: {updates=}')
+                    for update in updates:
+                        self.handle_update(update)
+            except Exception:
+                logging.exception(f'exception while handling update: {data=}')

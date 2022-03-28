@@ -1,8 +1,5 @@
 import abc
-import json
-import logging
 import random
-import socket
 import threading
 import time
 from dataclasses import dataclass
@@ -11,6 +8,7 @@ from typing import Tuple, List, Dict, Optional
 from scipy.spatial import KDTree
 
 import settings
+from utils import *
 
 
 class MyJSONEncoder(json.JSONEncoder):
@@ -116,7 +114,7 @@ class Server:
         self.updates = []
         self.attacking_players: List[int] = []  # attacking players' ids
 
-        self.generate_mobs(2)
+        self.generate_mobs(20)
 
         logging.debug(f'server listening at: {self.socket.getsockname()}')
 
@@ -154,8 +152,7 @@ class Server:
             'mobs': list(self.mobs.values()),
             'projectiles': self.projectiles
         }, cls=MyJSONEncoder).encode() + b'\n'
-        print(len(data))
-        self.socket.sendto(data, address)
+        send_all(self.socket, data, address)
 
         self.clients.append(address)
         self.players[player.id] = player
@@ -169,13 +166,6 @@ class Server:
         self.updates.append({'cmd': 'player_leaves', 'id': data['id']})
 
         logging.debug(f'client disconnected: {address=}, {data=}')
-
-    def send_data(self, data):
-        for addr in self.clients:
-            try:
-                self.socket.sendto(data, addr)
-            except Exception:
-                logging.exception(f"can't send data to client: {addr=}, {data=}")
 
     def deal_damage(self, entity: Entity, damage: int):
         entity.health -= damage
@@ -232,8 +222,8 @@ class Server:
             try:
                 msg, address = self.socket.recvfrom(settings.HEADER_SIZE)
                 data = json.loads(msg.decode())
-
                 logging.debug(f'received data: {data=}')
+
                 if data["cmd"] == "connect":
                     if address not in self.clients:
                         self.connect(data=data, address=address)
@@ -247,7 +237,8 @@ class Server:
     def send_updates(self):
         data = json.dumps({'cmd': 'update', 'updates': self.updates}, cls=MyJSONEncoder).encode() + b'\n'
         self.updates.clear()
-        self.send_data(data)
+        for client in self.clients:
+            send_all(self.socket, data, client)
 
 
 def main():
