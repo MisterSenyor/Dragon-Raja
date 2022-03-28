@@ -13,8 +13,13 @@ from utils import *
 
 class MyJSONEncoder(json.JSONEncoder):
     def default(self, o):
-        if isinstance(o, (Projectile, Entity, Item)):
-            return o.__dict__
+        if isinstance(o, (Projectile, Entity)):
+            t = time.time_ns()
+            data = o.__dict__.copy()
+            del data['t0']
+            data['t'] = t
+            data['start_pos'] = o.get_pos(t)
+            return data
         return super(MyJSONEncoder, self).default(o)
 
 
@@ -192,7 +197,6 @@ class Server:
         if isinstance(o1, Entity) and isinstance(o2, Player):
             if o2.id in self.attacking_players:
                 self.deal_damage(o1, o2.get_damage())
-        self.attacking_players = []
 
     def collisions_handler(self):
         t = time.time_ns()
@@ -204,6 +208,9 @@ class Server:
         collisions = kd_tree.query_pairs(100)
         for col in collisions:
             self.handle_collision(moving_objs[col[0]], moving_objs[col[1]])
+        self.attacking_players = []
+        # collisions_ids = [[moving_objs[col[0]].id, moving_objs[col[1]].id] for col in collisions]
+        # self.updates.append({'cmd': 'collisions', 'collisions': collisions_ids})
 
     def handle_update(self, data, address):
         cmd = data['cmd']

@@ -13,10 +13,8 @@ def create_entity(cls, data, sprite_groups, walk_speed, animations, anim_speed, 
         anim_speed=anim_speed, id_=data['id'], **kwargs)
     entity.health = data['health']
     entity.move(*data['end_pos'], send_update=False)
-    # update _t according to data['t0']
     for item in data['items']:
         Item(item_type=item['item_type'], owner=entity)
-        # update duration according to data['t0']
     return entity
 
 
@@ -111,7 +109,6 @@ class Client:
     def receive_updates(self):
         while True:
             data = recv_json(self.sock, self.server)
-            logging.debug(f'received data: {data=}')
             try:
                 cmd = data['cmd']
                 if cmd == 'update':
