@@ -1,3 +1,4 @@
+import logging
 from typing import Tuple, Collection
 
 from my_server import Player, MyJSONEncoder
@@ -27,17 +28,19 @@ class LoadBalancer:
             for j in range(self.chunks_y):
                 self.chunk_mapping[i].append(2 * (i <= mid_x) + (j <= mid_y))  # magic
 
-    def get_server(self, pos: Tuple[int, int]):
-        i, j = pos[0] // self.chunk_size, pos[1] // self.chunk_size
-        return self.servers[self.chunk_mapping[i][j]]
+    def get_chunk(self, pos: Tuple[int, int]) -> Tuple[int, int]:
+        return pos[0] // self.chunk_size, pos[1] // self.chunk_size
 
-    def get_adj_servers(self, pos: Tuple[int, int]) -> Collection:
-        i, j = pos[0] // self.chunk_size, pos[1] // self.chunk_size
+    def get_server(self, chunk_idx: Tuple[int, int]):
+        return self.servers[self.chunk_mapping[chunk_idx[0]][chunk_idx[1]]]
+
+    def get_adj_server_idx(self, chunk_idx: Tuple[int, int]) -> Collection:
+        i, j = chunk_idx
         servers = set()
         for di in [-1, 0, 1]:
             for dj in [-1, 0, 1]:
                 if 0 <= i + di <= self.chunks_x and 0 <= j + dj < self.chunks_y:
-                    servers.add(self.servers[self.chunk_mapping[i + di][j + dj]])
+                    servers.add(self.chunk_mapping[i + di][j + dj])
         return servers
 
     def send_cmd(self, cmd: str, params: dict, address):
@@ -52,6 +55,19 @@ class LoadBalancer:
         self.send_cmd('redirect', {'server': server}, client)
         logging.debug(f'new client connected: {client=}, {player=}, {server=}')
 
+    def forward_updates(self, data, address):
+        updates_by_server_idx = [[] for _ in self.servers]
+        for chunk in data['chunks']:
+            chunk_idx = chunk['chunk_idx']
+            for adj_server in self.get_adj_server_idx(chunk_idx):
+                if adj_server != address:
+                    updates_by_server_idx[adj_server].extend(chunk['update_indices'])
+        logging.debug(f'{updates_by_server_idx=}, {address=}')
+        for i, updates_idx in enumerate(updates_by_server_idx):
+            server = self.servers[i]
+            if updates_idx:
+                self.send_cmd('update', {'updates': [data['updates'][update] for update in updates_idx]}, server)
+
     def receive_packets(self):
         while True:
             try:
@@ -62,6 +78,9 @@ class LoadBalancer:
                 if data["cmd"] == "connect":
                     if address not in self.servers:
                         self.connect(data=data, client=address)
+                elif data['cmd'] == 'forward_updates':
+                    if address in self.servers or True:  # TODO: remove
+                        self.forward_updates(data, address)
             except Exception:
                 logging.exception('exception while handling request')
 
