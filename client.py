@@ -2,7 +2,7 @@ from typing import Dict
 
 import pygame
 
-from entities import *
+import entities
 from network.utils import Address
 from utils import *
 
@@ -14,7 +14,7 @@ def create_entity(cls, data, sprite_groups, walk_speed, animations, anim_speed, 
     entity.health = data['health']
     entity.move(*data['end_pos'], send_update=False)
     for item in data['items']:
-        Item(item_type=item['item_type'], owner=entity)
+        entity.Item(item_type=item['item_type'], owner=entity)
     return entity
 
 
@@ -34,7 +34,7 @@ class Client:
         self.player_walk_speed = player_walk_speed
         self.mob_walk_speed = mob_walk_speed
 
-        self.main_player: MainPlayer = None
+        self.main_player = None
 
         self.entity_sprite_groups = [self.sprite_groups['all'], self.sprite_groups['entity']]
         self.projectile_sprite_groups = [self.sprite_groups['all'], self.sprite_groups['projectiles']]
@@ -44,23 +44,24 @@ class Client:
         self.sock.sendto(json.dumps({'cmd': cmd, **params}).encode() + b'\n', self.server)
 
     def create_main_player(self, data):
-        return create_entity(cls=MainPlayer, data=data, sprite_groups=self.player_sprite_groups,
+        return create_entity(cls=entities.MainPlayer, data=data, sprite_groups=self.player_sprite_groups,
                              walk_speed=self.player_walk_speed, sock_client=self,
                              animations=self.player_animations, anim_speed=self.player_anim_speed)
 
     def create_player(self, data):
-        return create_entity(cls=Player, data=data, sprite_groups=self.player_sprite_groups,
+        return create_entity(cls=entities.Player, data=data, sprite_groups=self.player_sprite_groups,
                              walk_speed=self.player_walk_speed, animations=self.player_animations,
                              anim_speed=self.player_anim_speed)
 
     def create_mob(self, data):
-        return create_entity(cls=Entity, data=data, sprite_groups=self.entity_sprite_groups,
+        return create_entity(cls=entities.Entity, data=data, sprite_groups=self.entity_sprite_groups,
                              walk_speed=self.mob_walk_speed, anim_speed=self.mob_anim_speed,
                              animations=self.mob_animations)
 
     def create_projectile(self, data):
-        Projectile(proj_type=data['type'], attacker=self.get_entity_by_id(data['attacker_id']),
-                   sprite_groups=self.projectile_sprite_groups, vect=pygame.Vector2(data['target']), send_update=False)
+        entities.Projectile(proj_type=data['type'], attacker=self.get_entity_by_id(data['attacker_id']),
+                            sprite_groups=self.projectile_sprite_groups, vect=pygame.Vector2(data['target']),
+                            send_update=False)
 
     def init(self):
         self.send_update('connect', {'username': 'ariel'})
@@ -78,7 +79,7 @@ class Client:
         except Exception:
             logging.exception(f'exception in init')
 
-    def get_entity_by_id(self, id_: int) -> Entity:
+    def get_entity_by_id(self, id_: int):
         entities = self.sprite_groups['entity'].sprites()
         ids = [entity.id for entity in entities]
         return entities[ids.index(id_)]
@@ -103,7 +104,7 @@ class Client:
                 # check collision with mob_ids
                 entity.melee_attack(send_update=False)
             elif cmd == 'use_item':
-                item = Item(item_type=update['item_type'], owner=entity)
+                item = entities.Item(item_type=update['item_type'], owner=entity)
                 item.use_item(send_update=False)
             elif cmd == 'player_leaves':
                 entity.kill()
