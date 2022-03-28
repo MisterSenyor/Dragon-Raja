@@ -26,3 +26,6 @@ WIDTH, HEIGHT = 1280, 720
 BLACK, RED = "#000000", "#FF0000"
 
 CHUNK_SIZE = 100
+LB_ADDRESS = ('127.0.0.1', 13579)
+
+MAP_SIZE = (10000, 5000)  # change to real value
