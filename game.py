@@ -1,16 +1,88 @@
-import random
+import logging
+import sys
 import threading
 from os import path
-from random import randint, randrange, choice
-import sys
-import client
+from random import randint, choice
+
 from Tilemap import *
 from animated_sprite import *
 from entities import *
-import logging
-import collections
 
 pg.init()
+
+
+class Button(pg.sprite.Sprite):
+    def __init__(self, groups, pos, size, font_size, text, target, args):
+        self.groups = groups
+        pg.sprite.Sprite.__init__(self, groups)
+        self.rect = pg.Rect(pos, size)
+        self.image = pg.Surface(size)
+        self.font_size = font_size
+        self.active = False
+        self.text = text
+        self.target = target
+        self.args = args
+        self.color = (150, 150, 150)
+
+    def events(self, event_list):
+        for event in event_list:
+            if event.type == pg.MOUSEBUTTONDOWN:
+                if self.rect.collidepoint(event.pos):
+                    self.target(self.args)
+
+    def update(self, *args, **kwargs):
+        mouse = pg.mouse.get_pos()
+        if self.rect.colliedepoint(mouse):
+            self.color = (90, 90, 90)
+        else:
+            self.color = (150, 150, 150)
+
+    def draw(self, screen):
+        pg.draw.rect(screen, self.color, self.rect)
+
+
+class TextInputBox(pg.sprite.Sprite):
+    def __init__(self, groups, pos, size, font_size):
+        self.groups = groups
+        pg.sprite.Sprite.__init__(self, groups)
+        self.rect = pg.Rect(pos, size)
+        self.image = pg.Surface(size)
+        self.font_size = font_size
+        self.active = False
+        self.text = "bottom text"
+
+    def events(self, event_list):
+        for event in event_list:
+            if event.type == pg.MOUSEBUTTONDOWN:
+                self.active = self.rect.collidepoint(event.pos)
+            if event.type == pg.KEYDOWN and self.active:
+                if event.key == pg.K_RETURN:
+                    self.active = False
+                elif event.key == pg.K_BACKSPACE:
+                    self.text = self.text[:-1]
+                else:
+                    self.text += event.unicode
+
+    def update(self, *args, **kwargs):
+        pass
+
+    def draw(self, screen):
+        pg.draw.rect(screen, (40, 40, 40), self.rect)
+        font = pygame.font.SysFont('./graphics/fonts/comicsans.ttf', self.font_size)
+        img = font.render(self.text, True, BLACK)
+        screen.blit(img, self.rect)
+
+
+def login_events():
+    return True
+
+
+def login_update():
+    pass
+
+
+def login_draw():
+    pass
 
 
 def update_dir(player: Entity, camera):
@@ -101,8 +173,11 @@ def handle_mouse(player, event, inv, camera):
         return
 
 
-def events(player, inv, camera, chat, sprite_groups):
-    for event in pg.event.get():
+def events(player, inv, camera, chat, sprite_groups, text):
+    all_events = pg.event.get()
+    for t in text:
+        t.events(all_events)
+    for event in all_events:
         if event.type == pg.QUIT:
             return False
         if chat.is_pressed:
@@ -124,7 +199,7 @@ def update(all_sprites, player, camera, map_rect, sprite_groups):
     camera.update(player)
 
 
-def draw(screen, all_sprites, map_img, map_rect, inv, chat, camera):
+def draw(screen, all_sprites, map_img, map_rect, inv, chat, camera, text):
     screen.fill(BGCOLOR)
 
     screen.blit(map_img, camera.apply_rect(map_rect))
@@ -134,6 +209,9 @@ def draw(screen, all_sprites, map_img, map_rect, inv, chat, camera):
         sprite.draw(screen, camera)
     inv.render(screen)  # RENDER INVENTORY
     chat.update(screen)
+
+    for t in text:
+        t.draw(screen)
     pg.display.update()
 
 
@@ -229,10 +307,20 @@ def run():
 
     chat = Chat()
     chat.add_line("hello", "moshe")
+
+    state = 'GAME'
+    text_boxes = [TextInputBox([], (50, 50), (500, 100), 60)]
+
     while running:
-        running = events(player, inv, camera, chat, sprite_groups)
-        update(all_sprites, player, camera, map_rect, sprite_groups)
-        draw(screen, sprite_groups["all"], map_img, map_rect, inv, chat, camera)
+        if state == 'GAME':
+            running = events(player, inv, camera, chat, sprite_groups, text_boxes)
+            update(all_sprites, player, camera, map_rect, sprite_groups)
+            draw(screen, sprite_groups["all"], map_img, map_rect, inv, chat, camera, text_boxes)
+
+        elif state == 'LOGIN':
+            running = login_events()
+            login_update()
+            login_draw()
         clock.tick(FPS)
 
     sock_client.send_update('disconnect', {'id': player.id})
