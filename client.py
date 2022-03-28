@@ -92,6 +92,8 @@ class Client:
                 self.create_player(update['player'])
         elif cmd == 'projectile' and update['id'] != self.main_player.id:
             self.create_projectile(update['projectile'])
+        elif cmd == 'collisions':
+            pass
         elif update['id'] != self.main_player.id:
             entity = self.get_entity_by_id(update['id'])
 

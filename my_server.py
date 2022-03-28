@@ -1,7 +1,7 @@
-import abc
 import random
 import threading
 import time
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Tuple, List, Dict, Optional
 
@@ -13,11 +13,10 @@ from utils import *
 
 class MyJSONEncoder(json.JSONEncoder):
     def default(self, o):
-        if isinstance(o, (Projectile, Entity)):
+        if isinstance(o, MovingObject):
             t = time.time_ns()
             data = o.__dict__.copy()
             del data['t0']
-            data['t'] = t
             data['start_pos'] = o.get_pos(t)
             return data
         return super(MyJSONEncoder, self).default(o)
@@ -30,17 +29,32 @@ class Item:
 
 
 @dataclass
-class Entity(abc.ABC):
+class MovingObject(ABC):
     id: Optional[int]
     start_pos: Tuple[int, int]
-    end_pos: Optional[Tuple[int, int]]
     t0: int
-    health: int
-    items: List[Item]
 
     def __post_init__(self):
         if self.id is None:
             self.id = random.randint(0, 99999)
+
+    @abstractmethod
+    def get_pos(self, t: int = None):
+        pass
+
+    @abstractmethod
+    def get_speed(self):
+        pass
+
+
+@dataclass
+class Entity(MovingObject, ABC):
+    end_pos: Optional[Tuple[int, int]]
+    health: int
+    items: List[Item]
+
+    def __post_init__(self):
+        super(Entity, self).__post_init__()
         if self.end_pos is None:
             self.end_pos = tuple(self.start_pos)
 
@@ -63,10 +77,6 @@ class Entity(abc.ABC):
         return round(self.end_pos[0] * p + self.start_pos[0] * (1 - p)), round(
             self.end_pos[1] * p + self.start_pos[1] * (1 - p))
 
-    @abc.abstractmethod
-    def get_speed(self):
-        pass
-
 
 @dataclass
 class Player(Entity):
@@ -80,9 +90,7 @@ class Player(Entity):
 
 
 @dataclass
-class Projectile:
-    t0: int
-    start_pos: Tuple[int, int]
+class Projectile(MovingObject):
     target: Tuple[int, int]
     type: str
     attacker_id: int
@@ -115,7 +123,7 @@ class Server:
 
         self.players: Dict[int, Player] = {}
         self.mobs: Dict[int, Mob] = {}
-        self.projectiles: List[Projectile] = []
+        self.projectiles: Dict[int, Projectile] = {}
         self.updates = []
         self.attacking_players: List[int] = []  # attacking players' ids
 
@@ -140,8 +148,8 @@ class Server:
         if random.random() < 0.01:
             m = random.choice(list(self.mobs.values()))
             target = random.randint(-100, 100), random.randint(-100, 100)
-            proj = Projectile(t0=t, start_pos=m.get_pos(t), target=target, type='axe', attacker_id=m.id)
-            self.projectiles.append(proj)
+            proj = Projectile(id=None, t0=t, start_pos=m.get_pos(t), target=target, type='axe', attacker_id=m.id)
+            self.projectiles[proj.id] = proj
             logging.debug(f'mob shot projectile: {m=}, {proj=}')
             self.updates.append({'cmd': 'projectile', 'projectile': proj, 'id': m.id})
 
@@ -181,36 +189,45 @@ class Server:
                 del self.mobs[entity.id]
             logging.debug(f'entity died: {entity=}')
 
-    def handle_collision(self, o1, o2):
+    def handle_collision(self, o1, o2) -> bool:
+        result = False
         if isinstance(o1, Projectile) and isinstance(o2, Entity):
-            self.handle_collision(o2, o1)
+            result = self.handle_collision(o2, o1)
         if isinstance(o1, Entity) and isinstance(o2, Projectile):
             entity, proj = o1, o2
             if proj.attacker_id != entity.id:
+                result = True
                 logging.debug(f'entity-projectile collision: {entity=}, {proj=}')
                 logging.debug(f'{entity.get_pos()=}, {proj.get_pos()=}')
-                self.projectiles.remove(proj)
+                if proj.id in self.projectiles:
+                    del self.projectiles[proj.id]
                 self.deal_damage(entity, proj.get_damage())
         if isinstance(o1, Player) and isinstance(o2, Entity):
             if o1.id in self.attacking_players:
+                result = True
                 self.deal_damage(o2, o1.get_damage())
         if isinstance(o1, Entity) and isinstance(o2, Player):
             if o2.id in self.attacking_players:
+                result = True
                 self.deal_damage(o1, o2.get_damage())
+        return result
 
     def collisions_handler(self):
         t = time.time_ns()
-        moving_objs = list(self.players.values()) + list(self.mobs.values()) + self.projectiles
+        moving_objs: List[MovingObject] = list(self.players.values()) + list(self.mobs.values()) + list(self.projectiles.values())
         if not moving_objs:
             return
         data = [o.get_pos(t) for o in moving_objs]
         kd_tree = KDTree(data)
         collisions = kd_tree.query_pairs(100)
+        relevant_collisions = []
         for col in collisions:
-            self.handle_collision(moving_objs[col[0]], moving_objs[col[1]])
+            o1, o2 = moving_objs[col[0]], moving_objs[col[1]]
+            if self.handle_collision(o1, o2):
+                relevant_collisions.append([o1.id, o2.id])
         self.attacking_players = []
-        # collisions_ids = [[moving_objs[col[0]].id, moving_objs[col[1]].id] for col in collisions]
-        # self.updates.append({'cmd': 'collisions', 'collisions': collisions_ids})
+        if relevant_collisions:
+            self.updates.append({'cmd': 'collisions', 'collisions': relevant_collisions})
 
     def handle_update(self, data, address):
         cmd = data['cmd']
@@ -219,7 +236,8 @@ class Server:
         if cmd == 'move':
             player.move(data['pos'])
         elif cmd == 'projectile':
-            self.projectiles.append(Projectile(**data['projectile'], start_pos=player.get_pos(t), t0=t))
+            proj = Projectile(**data['projectile'], start_pos=player.get_pos(t), t0=t, id=None)
+            self.projectiles[proj.id] = proj
         elif cmd == 'attack':
             self.attacking_players.append(player.id)
         self.updates.append(data)
