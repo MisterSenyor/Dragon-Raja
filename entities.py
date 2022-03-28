@@ -354,11 +354,11 @@ class Projectile(pg.sprite.Sprite):
         if proj_type == 'arrow':
             self._speed = 10
             self.damage = 20
-            self.image = pg.transform.rotate(self.image, 230 + self.angle)  # ROTATE SO IT'S FACING IN ITS DIRECTION
+            self.image = pg.transform.rotate(self.image, 230 - self.angle)  # ROTATE SO IT'S FACING IN ITS DIRECTION
         elif proj_type == 'axe':
             self._speed = 10
             self.damage = 20
-            self.image = pg.transform.rotate(self.image, 310 + self.angle)
+            self.image = pg.transform.rotate(self.image, 310 - self.angle)
         else:
             self.image = pg.transform.rotate(self.image, self.angle)
             self._speed = 10
@@ -419,10 +419,13 @@ class Chat(pg.sprite.Sprite):
         self.is_pressed = False  # WHETHER BUTTON TO CHAT HAS BEEN PRESSED OR NOT
         self._char_lim = 20
 
-    def add_line(self, line: str):
+    def add_line(self, line: str, username=''):
+        # CHECK IF USERNAME WAS GIVEN, ADD IT
+        if username != '':
+            username += ': '
         # CHECK IF CHAT NOT FULL:
         if len(self.lines) < 8:
-            self.lines.append(line)
+            self.lines.append(username + line)
         else:
             # IF FULL, REMOVE LAST LINE AND INSERT NEW LINE AS FIRST
             self.lines.popleft()  # FIRST IN FIRST OUT

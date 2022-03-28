@@ -228,7 +228,7 @@ def run():
     inv.add_item(speed_pot)
 
     chat = Chat()
-    chat.add_line("press t to chat")
+    chat.add_line("hello", "moshe")
     while running:
         running = events(player, inv, camera, chat, sprite_groups)
         update(all_sprites, player, camera, map_rect, sprite_groups)
