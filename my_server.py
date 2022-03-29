@@ -1,3 +1,4 @@
+import logging
 import random
 import threading
 import time
@@ -139,13 +140,13 @@ class Server:
 
     def update_mobs(self):
         t = time.time_ns()
-        if random.random() < 0.01:
+        if random.random() < 0.01 * len(self.mobs):
             m = random.choice(list(self.mobs.values()))
             pos = m.get_pos(t)
             m.move(t=t, pos=(pos[0] + random.randint(100, 500), pos[1] + random.randint(100, 500)))
             logging.debug(f'mob moved: {m=}')
             self.updates.append({'cmd': 'move', 'pos': m.end_pos, 'id': m.id})
-        if random.random() < 0.01:
+        if random.random() < 0.01 * len(self.mobs):
             m = random.choice(list(self.mobs.values()))
             target = random.randint(-100, 100), random.randint(-100, 100)
             proj = Projectile(id=None, t0=t, start_pos=m.get_pos(t), target=target, type='axe', attacker_id=m.id)
