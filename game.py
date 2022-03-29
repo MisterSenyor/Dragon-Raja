@@ -7,6 +7,7 @@ from random import randint, choice
 from Tilemap import *
 from animated_sprite import *
 from entities import *
+from client_chat import chat_client
 
 pg.init()
 
@@ -315,6 +316,12 @@ def run():
                                 player_walk_speed=5, mob_anim_speed=15, mob_walk_speed=2)
     sock_client.init()
     threading.Thread(target=sock_client.receive_updates).start()
+    username = "moshe"
+
+    client_chat = chat_client(username)
+    client_chat.start()
+    chat = Chat(client_chat)
+    threading.Thread(target=client_chat.receive, args=(chat,)).start()
 
     player = sock_client.main_player
     create_enemies(sprite_groups, mob_anims)
@@ -346,17 +353,10 @@ def run():
     inv.add_item(strength_pot)
     player.items.add(strength_pot)
     inv.add_item(strength_pot)
-    player.items.add(strength_pot)
-    inv.add_item(strength_pot)
 
     player.items.add(speed_pot)
     inv.add_item(speed_pot)
 
-    player.items.add(speed_pot)
-    inv.add_item(speed_pot)
-
-    chat = Chat()
-    chat.add_line("hello", "moshe")
 
     state = 'GAME'
     text_boxes = [TextInputBox([], (50, 50), (500, 100), 60)]

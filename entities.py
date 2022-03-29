@@ -7,6 +7,7 @@ import pygame as pg
 import client
 import collections
 from settings import *
+from client_chat import *
 
 
 class Entity(pg.sprite.Sprite):
@@ -433,8 +434,9 @@ class Chat(pg.sprite.Sprite):
     OTHERWISE STARTS AS EMPTY CHAT
     """
 
-    def __init__(self, lines=collections.deque([])):
+    def __init__(self, client_chat, lines=collections.deque([])):
         pg.sprite.Sprite.__init__(self)
+        self.client_chat = client_chat
         self.font = pg.font.Font(pg.font.get_default_font(), 25)
         self.lines = lines
         self.cur_typed = ''  # LINE BEING TYPED BY CLIENT
@@ -442,13 +444,10 @@ class Chat(pg.sprite.Sprite):
         self.is_pressed = False  # WHETHER BUTTON TO CHAT HAS BEEN PRESSED OR NOT
         self._char_lim = 20
 
-    def add_line(self, line: str, username=''):
-        # CHECK IF USERNAME WAS GIVEN, ADD IT
-        if username != '':
-            username += ': '
+    def add_line(self, line: str):
         # CHECK IF CHAT NOT FULL:
         if len(self.lines) < 8:
-            self.lines.append(username + line)
+            self.lines.append(line)
         else:
             # IF FULL, REMOVE LAST LINE AND INSERT NEW LINE AS FIRST
             self.lines.popleft()  # FIRST IN FIRST OUT
@@ -459,10 +458,7 @@ class Chat(pg.sprite.Sprite):
         if len(line) > self._char_lim:
             logging.debug(f'unable to send line, character limit reached')
             return
-        self.add_line(line)
-
-        # TODO: SEND LINE TO SERVER
-        pass
+        self.client_chat.send(line)
 
     def update(self, screen):
         # BLIT EVERY LINE TOP LEFT OF SCREEN:

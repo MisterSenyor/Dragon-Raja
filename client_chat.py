@@ -1,6 +1,7 @@
 import socket
 import threading
 import settings
+from entities import *
 
 
 class chat_client:
@@ -20,16 +21,16 @@ class chat_client:
         except Exception:
             print("exception during start method")
 
-    def receive(self):
-        try:
-            message = self.socket.recv(settings.HEADER_SIZE).decode()
-            print("server sent: {}".format(message))
-            return message
-        except:
-            print('Error receiving message from server, closing connection')
-            self.socket.close()
+    def receive(self, chat):
+        while True:
+            try:
+                message = self.socket.recv(settings.HEADER_SIZE).decode()
+                print("server sent: {}".format(message))
+                chat.add_line(message)
+            except:
+                print('Error receiving message from server, closing connection')
 
-    def send(self, data):
+    def send(self, data: str):
         try:
             self.socket.send(data.encode())
         except Exception:
