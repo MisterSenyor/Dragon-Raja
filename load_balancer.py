@@ -11,6 +11,7 @@ class LoadBalancer:
         self.socket = sock
 
         self.servers = servers
+        self.clients = {}  # id to client address
 
         self.chunks_x = MAP_SIZE[0] // CHUNK_SIZE
         self.chunks_y = MAP_SIZE[1] // CHUNK_SIZE
@@ -48,7 +49,8 @@ class LoadBalancer:
     def connect(self, data, client):
         player = Player(id=None, start_pos=(1400, 1360), end_pos=None,
                         health=100, items=[], t0=0, username=data['username'])
-        server = self.get_server(player.start_pos)
+        server = self.get_server(self.get_chunk(player.start_pos))
+        self.clients[player.id] = client
         self.send_cmd('connect', {'player': player, 'client': client}, server)
         self.send_cmd('redirect', {'server': server}, client)
         logging.debug(f'new client connected: {client=}, {player=}, {server=}')
@@ -59,6 +61,19 @@ class LoadBalancer:
             for adj_server in self.get_adj_server_idx(chunk_idx):
                 if adj_server != address:
                     updates_by_server_idx[adj_server].append(update_idx)
+            # redirect clients
+            update = data['updates'][update_idx]
+            if update['cmd'] == 'move':
+                new_server = self.get_server(self.get_chunk(update['pos']))
+                if new_server != address:
+                    client = self.clients[update['id']]
+                    self.send_cmd('redirect', {'server': new_server}, client)
+                    self.send_cmd('add_client', {'client': client, 'id': update['id']}, new_server)
+                    self.send_cmd('remove_client', {'client': client, 'id': update['id']}, address)
+            # remove client internally
+            elif update['cmd'] == 'player_leaves':
+                del self.clients[update['id']]
+
         for i, updates_idx in enumerate(updates_by_server_idx):
             server = self.servers[i]
             if updates_idx:
