@@ -163,7 +163,7 @@ class Server:
             'main_player': player,
             'players': list(self.players.values()),
             'mobs': list(self.mobs.values()),
-            'projectiles': self.projectiles
+            'projectiles': list(self.projectiles.values())
         }, cls=MyJSONEncoder).encode() + b'\n'
         send_all(self.socket, data, address)
 
