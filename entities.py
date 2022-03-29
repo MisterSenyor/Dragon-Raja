@@ -288,6 +288,22 @@ class Item(pg.sprite.Sprite):
             self.remove(self.group)
 
 
+class Dropped(pg.sprite.Sprite):
+    def __init__(self, item_type: str, pos: tuple, sprite_groups):
+        self.groups = sprite_groups
+        pg.sprite.Sprite.__init__(self, *self.groups)
+        self.item_type = item_type
+        self.image = pg.image.load('graphics/items/' + item_type + ".png")
+        self.rect = self.image.get_rect()
+        self.rect.topleft = pos
+
+    def update(self, *args):
+        pass
+
+    def draw(self, screen, camera):
+        screen.blit(self.image, camera.apply(self))
+
+
 class Inventory:
     def __init__(self):
         self.slots = []
@@ -318,6 +334,13 @@ class Inventory:
 
         # DRAW OUTLINE AROUND CURRENT SLOT:
         screen.blit(self.slot_img, (self.rect.topleft[0] + self.cur_slot * 40, self.rect.topleft[1]))
+
+    def is_full(self):
+        """ RETURNS TRUE IF INVENTORY IS FULL, IF NO SLOTS AVAILABLE RETURNS FALSE"""
+        for i in range(0, 15):
+            if self.slots[i] == 0:
+                return False
+        return True
 
     def add_item(self, item: Item, send_updates=False):
         """" ADD ITEM TO FIRST EMPTY SLOT"""
