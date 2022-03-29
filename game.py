@@ -7,6 +7,7 @@ from random import randint, choice
 from Tilemap import *
 from animated_sprite import *
 from entities import *
+from client_chat import chat_client
 
 pg.init()
 
@@ -85,6 +86,48 @@ def login_draw():
     pass
 
 
+def drop_item(player, inv: Inventory, sprite_groups):
+    """ DROPS ITEM FROM CURRENT SLOT ON THE GROUND"""
+    # GET CUR ITEM:
+    item = inv.slots[inv.cur_slot]
+
+    # CHECK IF CUR SLOT IS EMPTY:
+    if item != 0:
+        # REMOVE FROM INVENTORY
+        inv.remove_item(inv.cur_slot)
+
+        # CHECK IN WHICH DIRECTION TO DROP ITEM:
+        if player.direction == 1:
+            pos = player.rect.topleft
+        else:
+            pos = player.rect.topright
+        dropped_item = Dropped(item.item_type, pos,  [sprite_groups["all"], sprite_groups["dropped"]])
+
+
+def pick_item(player, inv: Inventory, sprite_groups):
+    """" PICKS UP ITEM:
+    CHECKS IF INVENTORY IS FULL,
+    CHECKS COLLISION WITH DROPPED ITEMS,
+    REMOVES DROPPED ITEM FROM ITS GROUPS AND ADDS ITEM TO INVENTORY"""
+
+    # CHECK INV:
+    if inv.is_full():
+        print("INV FULL")
+        return
+
+    # GO OVER ALL DROPPED ITEMS:
+    for sprite in sprite_groups["dropped"]:
+        # CHECK COLLISION WITH PLAYER:
+        if pg.sprite.collide_rect(player, sprite):
+            # ADD ITEM TO INV AND PLAYER ITEMS:
+            item = Item(sprite.item_type, player)
+            inv.add_item(item)
+            player.items.add(item)
+
+            # REMOVE DROPPED ITEM FROM SPRITE GROUPS:
+            sprite.remove(sprite_groups["all"], sprite_groups["dropped"])
+
+
 def update_dir(player: Entity, camera):
     """ UPDATES PLAYER DIRECTION ACCORDING TO
     MOUSE POS (0 = RIGHT, 1 = LEFT) """
@@ -124,6 +167,12 @@ def handle_keyboard(player, inv, camera, key, chat, sprite_groups):
 
     elif key == 103:  # G KEY
         player.use_skill(1, sprite_groups, inv)
+
+    elif key == 113:  # Q KEY
+        drop_item(player, inv, sprite_groups)
+
+    elif key == 98:
+        pick_item(player, inv, sprite_groups)
 
     elif key == 116:  # T KEY - CHAT
         chat.is_pressed = True
@@ -234,11 +283,13 @@ def run():
     entity_sprites = pg.sprite.Group()
     players_sprites = pg.sprite.Group()
     projectile_sprites = pg.sprite.Group()
+    dropped_sprites = pg.sprite.Group()
     sprite_groups = {
         "all": all_sprites,
         "entity": entity_sprites,
         "players": players_sprites,
-        "projectiles": projectile_sprites
+        "projectiles": projectile_sprites,
+        "dropped": dropped_sprites
     }
 
     player_anims = {
@@ -265,6 +316,12 @@ def run():
                                 player_walk_speed=5, mob_anim_speed=15, mob_walk_speed=2)
     sock_client.init()
     threading.Thread(target=sock_client.receive_updates).start()
+    username = "moshe"
+
+    client_chat = chat_client(username)
+    client_chat.start()
+    chat = Chat(client_chat)
+    threading.Thread(target=client_chat.receive, args=(chat,)).start()
 
     player = sock_client.main_player
     create_enemies(sprite_groups, mob_anims)
@@ -296,21 +353,14 @@ def run():
     inv.add_item(strength_pot)
     player.items.add(strength_pot)
     inv.add_item(strength_pot)
-    player.items.add(strength_pot)
-    inv.add_item(strength_pot)
 
     player.items.add(speed_pot)
     inv.add_item(speed_pot)
 
-    player.items.add(speed_pot)
-    inv.add_item(speed_pot)
-
-    chat = Chat()
-    chat.add_line("hello", "moshe")
 
     state = 'GAME'
     text_boxes = [TextInputBox([], (50, 50), (500, 100), 60)]
-
+    drp_pot = Dropped("speed_pot", player.rect.center, [sprite_groups["all"], sprite_groups["dropped"]])
     while running:
         if state == 'GAME':
             running = events(player, inv, camera, chat, sprite_groups, text_boxes)

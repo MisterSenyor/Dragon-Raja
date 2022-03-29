@@ -7,6 +7,7 @@ import pygame as pg
 import client
 import collections
 from settings import *
+from client_chat import *
 
 
 class Entity(pg.sprite.Sprite):
@@ -288,6 +289,22 @@ class Item(pg.sprite.Sprite):
             self.remove(self.group)
 
 
+class Dropped(pg.sprite.Sprite):
+    def __init__(self, item_type: str, pos: tuple, sprite_groups):
+        self.groups = sprite_groups
+        pg.sprite.Sprite.__init__(self, *self.groups)
+        self.item_type = item_type
+        self.image = pg.image.load('graphics/items/' + item_type + ".png")
+        self.rect = self.image.get_rect()
+        self.rect.topleft = pos
+
+    def update(self, *args):
+        pass
+
+    def draw(self, screen, camera):
+        screen.blit(self.image, camera.apply(self))
+
+
 class Inventory:
     def __init__(self):
         self.slots = []
@@ -318,6 +335,13 @@ class Inventory:
 
         # DRAW OUTLINE AROUND CURRENT SLOT:
         screen.blit(self.slot_img, (self.rect.topleft[0] + self.cur_slot * 40, self.rect.topleft[1]))
+
+    def is_full(self):
+        """ RETURNS TRUE IF INVENTORY IS FULL, IF NO SLOTS AVAILABLE RETURNS FALSE"""
+        for i in range(0, 15):
+            if self.slots[i] == 0:
+                return False
+        return True
 
     def add_item(self, item: Item, send_updates=False):
         """" ADD ITEM TO FIRST EMPTY SLOT"""
@@ -410,8 +434,9 @@ class Chat(pg.sprite.Sprite):
     OTHERWISE STARTS AS EMPTY CHAT
     """
 
-    def __init__(self, lines=collections.deque([])):
+    def __init__(self, client_chat, lines=collections.deque([])):
         pg.sprite.Sprite.__init__(self)
+        self.client_chat = client_chat
         self.font = pg.font.Font(pg.font.get_default_font(), 25)
         self.lines = lines
         self.cur_typed = ''  # LINE BEING TYPED BY CLIENT
@@ -419,13 +444,10 @@ class Chat(pg.sprite.Sprite):
         self.is_pressed = False  # WHETHER BUTTON TO CHAT HAS BEEN PRESSED OR NOT
         self._char_lim = 20
 
-    def add_line(self, line: str, username=''):
-        # CHECK IF USERNAME WAS GIVEN, ADD IT
-        if username != '':
-            username += ': '
+    def add_line(self, line: str):
         # CHECK IF CHAT NOT FULL:
         if len(self.lines) < 8:
-            self.lines.append(username + line)
+            self.lines.append(line)
         else:
             # IF FULL, REMOVE LAST LINE AND INSERT NEW LINE AS FIRST
             self.lines.popleft()  # FIRST IN FIRST OUT
@@ -436,10 +458,7 @@ class Chat(pg.sprite.Sprite):
         if len(line) > self._char_lim:
             logging.debug(f'unable to send line, character limit reached')
             return
-        self.add_line(line)
-
-        # TODO: SEND LINE TO SERVER
-        pass
+        self.client_chat.send(line)
 
     def update(self, screen):
         # BLIT EVERY LINE TOP LEFT OF SCREEN:

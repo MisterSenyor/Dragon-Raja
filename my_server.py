@@ -9,7 +9,7 @@ from scipy.spatial import KDTree
 
 import settings
 from utils import *
-
+from server_chat import chat_server
 
 class MyJSONEncoder(json.JSONEncoder):
     def default(self, o):
@@ -274,6 +274,9 @@ def main():
     server = Server(sock=sock)
     receive_thread = threading.Thread(target=server.receive_packets)
     receive_thread.start()
+    # INITIALIZE CHAT SERVER:
+    server_chat = chat_server()
+    threading.Thread(target=server_chat.start).start()
 
     while True:
         time.sleep(settings.UPDATE_TICK)
