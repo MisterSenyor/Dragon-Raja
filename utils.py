@@ -31,3 +31,7 @@ def recv_json(sock: socket.socket, address, max_iterations=10):
                 raise ConnectionError(f'max iterations exceeded in recv_json')
     except Exception:
         logging.exception(f"can't receive json data: {address=}, {max_iterations=}, {k=}, {data=}")
+
+
+def dist(pos1, pos2):
+    return ((pos1[0] - pos2[0]) ** 2 + (pos1[1] - pos2[1]) ** 2) ** 0.5
