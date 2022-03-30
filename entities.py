@@ -306,13 +306,14 @@ class Dropped(pg.sprite.Sprite):
 
 
 class Inventory:
-    def __init__(self):
+    def __init__(self, screen_size):
         self.slots = []
         for i in range(0, 15):
             self.slots.append(0)
         self.image = pg.image.load("Graphics/Inventory.png")
         self.rect = self.image.get_rect()
-        self.rect.topleft = (240, 640)
+        self.rect.bottom = screen_size[1]
+        self.rect.centerx = screen_size[0] // 2
         self.slot_img = pg.image.load("Graphics/cur_slot.png")
         self.cur_slot = 0  # current slot
         self.font = pg.font.Font(pg.font.get_default_font(), 25)

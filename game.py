@@ -277,7 +277,8 @@ def run():
     logging.basicConfig(level=logging.DEBUG)
 
     clock = pg.time.Clock()
-    screen = pg.display.set_mode((WIDTH, HEIGHT))
+    screen = pg.display.set_mode((0, 0), pg.FULLSCREEN)
+    WIDTH, HEIGHT = screen.get_size()
 
     all_sprites = pg.sprite.Group()
     entity_sprites = pg.sprite.Group()
@@ -340,7 +341,7 @@ def run():
     pg.mouse.set_cursor(pg.cursors.broken_x)
 
     running = True
-    inv = Inventory()
+    inv = Inventory((WIDTH, HEIGHT))
 
     # ITEMS:
     speed_pot = Item("speed_pot", player)
