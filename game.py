@@ -355,11 +355,12 @@ def run():
     inv.add_item(strength_pot)
 
     player.items.add(speed_pot)
+
     inv.add_item(speed_pot)
 
 
     state = 'GAME'
-    text_boxes = [TextInputBox([], (50, 50), (500, 100), 60)]
+    text_boxes = []
     drp_pot = Dropped("speed_pot", player.rect.center, [sprite_groups["all"], sprite_groups["dropped"]])
     while running:
         if state == 'GAME':
