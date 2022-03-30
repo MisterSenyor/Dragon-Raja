@@ -42,6 +42,14 @@ class Button(pg.sprite.Sprite):
         pg.draw.rect(screen, self.color, self.rect)
 
 
+class loginScreen(pg.sprite.Sprite):
+    def __init__(self, groups, image, height, width):
+        self.groups = groups
+        pg.sprite.Sprite.__init__(self, groups)
+        self.image = image
+        self.size = (width,height)
+        self.active = False
+
 class TextInputBox(pg.sprite.Sprite):
     def __init__(self, groups, pos, size, font_size):
         self.groups = groups
@@ -50,7 +58,7 @@ class TextInputBox(pg.sprite.Sprite):
         self.image = pg.Surface(size)
         self.font_size = font_size
         self.active = False
-        self.text = "bottom text"
+        self.text = ""
 
     def events(self, event_list):
         for event in event_list:
@@ -74,16 +82,31 @@ class TextInputBox(pg.sprite.Sprite):
         screen.blit(img, self.rect)
 
 
-def login_events():
+def login_events(text, button):
+    all_events = pg.event.get()
+    for event in all_events:
+        if event.type == pg.QUIT:
+            return False
+    for t in text:
+        t.events(all_events)
+    for b in button:
+        b.events(all_events)
     return True
-
 
 def login_update():
     pass
 
-
-def login_draw():
+def sign_up():
     pass
+
+def log_in():
+    pass
+
+
+def login_draw(screen, text):
+    for t in text:
+            t.draw(screen)
+    pg.display.update()
 
 
 def drop_item(player, inv: Inventory, sprite_groups):
@@ -359,9 +382,12 @@ def run():
 
     inv.add_item(speed_pot)
 
-
     state = 'GAME'
-    text_boxes = []
+    text_boxes = [TextInputBox([], (55, 165), (420, 55), 45),
+                  TextInputBox([], (55, 335), (420, 55), 45)]
+    buttons = [Button([], (325, 470), (133, 55), 0, "", 0, 0),
+               Button([], (75, 470), (133, 55), 0, "", 0, 0)]
+
     drp_pot = Dropped("speed_pot", player.rect.center, [sprite_groups["all"], sprite_groups["dropped"]])
     while running:
         if state == 'GAME':
@@ -370,9 +396,19 @@ def run():
             draw(screen, sprite_groups["all"], map_img, map_rect, inv, chat, camera, text_boxes)
 
         elif state == 'LOGIN':
-            running = login_events()
-            login_update()
-            login_draw()
+            login = loginScreen([], "login_screen.png", 602, 529)
+            img = pg.image.load(login.image)
+            screen.blit(img, (0, 0))
+            pg.display.flip()
+            sock_lb = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            port_lb = 3333
+            sock_lb.bind((IP, port_lb))
+            finish = True
+            while finish:
+                finish = login_events(text_boxes, buttons)
+                login_draw(screen, text_boxes)
+                clock.tick(FPS)
+
         clock.tick(FPS)
 
     sock_client.send_update('disconnect', {'id': player.id})
