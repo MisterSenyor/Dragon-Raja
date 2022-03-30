@@ -11,6 +11,31 @@ from scipy.spatial import KDTree
 import settings
 from utils import *
 from server_chat import chat_server
+import pygame as pg
+
+
+def check_collisions(direction: tuple, pos_before: tuple, pos_after: tuple, size: tuple, target_pos: tuple,
+                     target_size: tuple) -> tuple:
+    temp = pg.Rect(pos_after, size)
+    hit = pg.Rect(target_pos, target_size)
+
+    if direction[0] > 0:
+        if temp.left > hit.right > pos_before[0] + size[0]:
+            temp.move(hit.right - temp.left, 0)
+    elif direction[0] < 0:
+        if temp.right < hit.left and pos_before[0] > hit.right:
+            temp.move(hit.left - temp.right, 0)
+
+    # checking Y
+    if direction[1] > 0:
+        if temp.bottom > hit.top > pos_before[1] + size[1]:
+            temp.move(0, hit.top - temp.bottom)
+    elif direction[1] < 0:
+        if temp.top < hit.bottom < pos_before[1]:
+            temp.move(0, hit.bottom - temp.top)
+
+    return temp.topright
+
 
 class MyJSONEncoder(json.JSONEncoder):
     def default(self, o):
@@ -146,10 +171,13 @@ class Server:
             m.move(t=t, pos=(pos[0] + random.randint(100, 500), pos[1] + random.randint(100, 500)))
             logging.debug(f'mob moved: {m=}')
             self.updates.append({'cmd': 'move', 'pos': m.end_pos, 'id': m.id})
-        if random.random() < 0.01 * len(self.mobs):
+        if random.random() < 0.01 * len(self.mobs) and self.players:
             m = random.choice(list(self.mobs.values()))
-            target = random.randint(-100, 100), random.randint(-100, 100)
-            proj = Projectile(id=None, t0=t, start_pos=m.get_pos(t), target=target, type='axe', attacker_id=m.id)
+            m_pos = m.get_pos(t)
+            player = random.choice(list(self.players.values()))
+            player_pos = player.get_pos(t)
+            target = player_pos[0] - m_pos[0], player_pos[1] - m_pos[1]
+            proj = Projectile(id=None, t0=t, start_pos=m_pos, target=target, type='axe', attacker_id=m.id)
             self.projectiles[proj.id] = proj
             logging.debug(f'mob shot projectile: {m=}, {proj=}')
             self.updates.append({'cmd': 'projectile', 'projectile': proj, 'id': m.id})
