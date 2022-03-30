@@ -382,11 +382,11 @@ def run():
 
     inv.add_item(speed_pot)
 
-    state = 'GAME'
-    text_boxes = [TextInputBox([], (55, 165), (420, 55), 45),
-                  TextInputBox([], (55, 335), (420, 55), 45)]
-    buttons = [Button([], (325, 470), (133, 55), 0, "", 0, 0),
-               Button([], (75, 470), (133, 55), 0, "", 0, 0)]
+    state = 'LOGIN'
+    text_boxes = [TextInputBox([], (555, 305), (420, 55), 45),
+                  TextInputBox([], (555, 475), (420, 55), 45)]
+    buttons = [Button([], (825, 610), (133, 55), 0, "", 0, 0),
+               Button([], (575, 610), (133, 55), 0, "", 0, 0)]
 
     drp_pot = Dropped("speed_pot", player.rect.center, [sprite_groups["all"], sprite_groups["dropped"]])
     while running:
@@ -398,7 +398,7 @@ def run():
         elif state == 'LOGIN':
             login = loginScreen([], "login_screen.png", 602, 529)
             img = pg.image.load(login.image)
-            screen.blit(img, (0, 0))
+            screen.blit(img, (500, 140))
             pg.display.flip()
             sock_lb = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             port_lb = 3333
@@ -407,6 +407,7 @@ def run():
             while finish:
                 finish = login_events(text_boxes, buttons)
                 login_draw(screen, text_boxes)
+                login_draw(screen, buttons)
                 clock.tick(FPS)
 
         clock.tick(FPS)
