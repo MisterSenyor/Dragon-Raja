@@ -63,8 +63,8 @@ class Client:
                             sprite_groups=self.projectile_sprite_groups, vect=pygame.Vector2(data['target']),
                             send_update=False)
 
-    def init(self):
-        self.send_update('connect', {'username': 'ariel'})
+    def init(self, username='ariel'):
+        self.send_update('connect', {'username': username})
         data = recv_json(self.sock, self.server)
         logging.debug(f'init data received: {data=}')
         try:

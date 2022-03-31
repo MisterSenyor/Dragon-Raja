@@ -17,15 +17,16 @@ class Button(pg.sprite.Sprite):
         self.groups = groups
         pg.sprite.Sprite.__init__(self, groups)
         self.rect = pg.Rect(pos, size)
-        self.image = pg.Surface(size)
         self.font_size = font_size
         self.active = False
         self.text = text
         self.target = target
         self.args = args
-        self.color = (150, 150, 150)
 
     def events(self, event_list):
+        """ EVENTS IN BUTTON,
+        RETURNS GAME STATE"""
+
         for event in event_list:
             if event.type == pg.MOUSEBUTTONDOWN:
                 if self.rect.collidepoint(event.pos):
@@ -33,31 +34,21 @@ class Button(pg.sprite.Sprite):
                     return 'GAME'
         return 'LOGIN'
 
-    def update(self, *args, **kwargs):
-        mouse = pg.mouse.get_pos()
-        if self.rect.colliedepoint(mouse):
-            self.color = (90, 90, 90)
-        else:
-            self.color = (150, 150, 150)
 
-    def draw(self, screen):
-        pg.draw.rect(screen, self.color, self.rect)
-
-
-class loginScreen(pg.sprite.Sprite):
+class LoginScreen(pg.sprite.Sprite):
     def __init__(self, groups, image, height, width):
         self.groups = groups
         pg.sprite.Sprite.__init__(self, groups)
         self.image = image
-        self.size = (width,height)
+        self.size = (width, height)
         self.active = False
+
 
 class TextInputBox(pg.sprite.Sprite):
     def __init__(self, groups, pos, size, font_size):
         self.groups = groups
         pg.sprite.Sprite.__init__(self, groups)
         self.rect = pg.Rect(pos, size)
-        self.image = pg.Surface(size)
         self.font_size = font_size
         self.active = False
         self.text = ""
@@ -65,31 +56,35 @@ class TextInputBox(pg.sprite.Sprite):
     def events(self, event_list):
         for event in event_list:
             if event.type == pg.MOUSEBUTTONDOWN:
+                # CHECK MOUSE COLLISION WITH BUTTON
                 self.active = self.rect.collidepoint(event.pos)
             if event.type == pg.KEYDOWN and self.active:
                 if event.key == pg.K_RETURN:
                     self.active = False
-                elif event.key == pg.K_BACKSPACE:
+                elif event.key == pg.K_BACKSPACE or event.key == pg.K_DELETE:
+                    # REMOVE LAST CHAR FROM TEXT
                     self.text = self.text[:-1]
                 else:
-                    self.text += event.unicode
-
-    def update(self, *args, **kwargs):
-        pass
+                    # CHECK USERNAME CHARACTER LIMIT
+                    if len(self.text) <= username_lim:
+                        self.text += event.unicode
 
     def draw(self, screen):
-        pg.draw.rect(screen, (40, 40, 40), self.rect)
+        """ DRAWS TEXT FROM TEXT BOX"""
         font = pygame.font.SysFont('./graphics/fonts/comicsans.ttf', self.font_size)
         img = font.render(self.text, True, BLACK)
         screen.blit(img, self.rect)
 
 
 def login_events(text, button):
+    """ CHECK EVENTS IN LOGIN SCREEN,
+    RETURNS WHETHER LOGIN HAS FINISHED AND GAME STATE"""
+
     state = 'LOGIN'
     all_events = pg.event.get()
     for event in all_events:
         if event.type == pg.QUIT:
-            return False
+            return False, 'QUIT'
     for t in text:
         t.events(all_events)
     for b in button:
@@ -98,19 +93,25 @@ def login_events(text, button):
             return False, state
     return True, state
 
+
 def login_update():
     pass
 
+
 def sign_up(args):
     pass
+
 
 def log_in(args):
     pass
 
 
 def login_draw(screen, text):
+    """ DRAWS TEXT FROM TEXT BOXES ONTO SCREEN,
+     UPDATES SCREEN """
+
     for t in text:
-            t.draw(screen)
+        t.draw(screen)
     pg.display.update()
 
 
@@ -129,7 +130,7 @@ def drop_item(player, inv: Inventory, sprite_groups):
             pos = player.rect.topleft
         else:
             pos = player.rect.topright
-        dropped_item = Dropped(item.item_type, pos,  [sprite_groups["all"], sprite_groups["dropped"]])
+        dropped_item = Dropped(item.item_type, pos, [sprite_groups["all"], sprite_groups["dropped"]])
 
 
 def pick_item(player, inv: Inventory, sprite_groups):
@@ -220,7 +221,7 @@ def handle_chat(chat, key):
         chat.is_pressed = False
     else:
         # CHECK IF MAX CHAR LIM REACHED:
-        if len(chat.cur_typed) < chat._char_lim:
+        if len(chat.cur_typed) < char_lim:
             try:
                 # ADD NEW LETTER TO TYPED LINE
                 chat.cur_typed += chr(key)
@@ -288,15 +289,6 @@ def draw(screen, all_sprites, map_img, map_rect, inv, chat, camera):
     pg.display.update()
 
 
-def create_enemies(sprite_groups, mob_anims):
-    return
-    mobs = []
-    for i in range(0, 100):
-        mobs.append(
-            Mob((randint(0, 12000), randint(0, 7600)), [sprite_groups["all"], sprite_groups["entity"]],
-                choice(mob_anims), 2, 15))
-
-
 def run():
     logging.basicConfig(level=logging.DEBUG)
 
@@ -342,9 +334,7 @@ def run():
     sock_client.init()
     threading.Thread(target=sock_client.receive_updates).start()
 
-
     player = sock_client.main_player
-    create_enemies(sprite_groups, mob_anims)
 
     # SETTING UP MAP
 
@@ -375,7 +365,6 @@ def run():
     inv.add_item(strength_pot)
 
     player.items.add(speed_pot)
-
     inv.add_item(speed_pot)
 
     state = 'LOGIN'
@@ -384,7 +373,6 @@ def run():
     buttons = [Button([], (825, 610), (133, 55), 0, "", log_in, None),
                Button([], (575, 610), (133, 55), 0, "", log_in, None)]
 
-    drp_pot = Dropped("speed_pot", player.rect.center, [sprite_groups["all"], sprite_groups["dropped"]])
     while running:
         if state == 'GAME':
             running = events(player, inv, camera, chat, sprite_groups)
@@ -392,27 +380,36 @@ def run():
             draw(screen, sprite_groups["all"], map_img, map_rect, inv, chat, camera)
 
         elif state == 'LOGIN':
-            login = loginScreen([], "login_screen.png", 602, 529)
+            # SETUP LOGIN SCREEN:
+            login = LoginScreen([], "login_screen.png", 602, 529)
             img = pg.image.load(login.image)
             screen.blit(img, (500, 140))
             pg.display.flip()
+
+            # CONNECT TO LOAD BALANCER:
             sock_lb = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             port_lb = 3333
             sock_lb.bind((IP, port_lb))
             finish = True
             while finish:
+                # CHECK EVENTS:
                 finish, state = login_events(text_boxes, buttons)
+                # DRAW TEXT:
                 login_draw(screen, text_boxes)
-                login_draw(screen, buttons)
+                # REDRAW BACKGROUND:
+                screen.blit(img, (500, 140))
                 clock.tick(FPS)
 
             pg.event.clear()
+            if state == 'QUIT':
+                pg.quit()
+                quit()
 
             username = text_boxes[0].text
 
             client_chat = chat_client(username)
             client_chat.start()
-            chat = Chat(client_chat)
+            chat = Chat(client_chat, username=username)
             threading.Thread(target=client_chat.receive, args=(chat,)).start()
 
         clock.tick(FPS)

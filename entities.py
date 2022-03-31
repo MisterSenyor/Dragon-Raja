@@ -438,7 +438,7 @@ class Chat(pg.sprite.Sprite):
     OTHERWISE STARTS AS EMPTY CHAT
     """
 
-    def __init__(self, client_chat, lines=collections.deque([])):
+    def __init__(self, client_chat, lines=collections.deque([]), username = ''):
         pg.sprite.Sprite.__init__(self)
         self.client_chat = client_chat
         self.font = pg.font.Font(pg.font.get_default_font(), 25)
@@ -446,7 +446,10 @@ class Chat(pg.sprite.Sprite):
         self.cur_typed = ''  # LINE BEING TYPED BY CLIENT
         self.color = BLACK
         self.is_pressed = False  # WHETHER BUTTON TO CHAT HAS BEEN PRESSED OR NOT
-        self._char_lim = 20
+        if username != '':
+            self.username = username + ': ' # if username given add it (for cur typed)
+        else:
+            self.username = username # empty string
 
     def add_line(self, line: str):
         # CHECK IF CHAT NOT FULL:
@@ -459,7 +462,7 @@ class Chat(pg.sprite.Sprite):
 
     def send_line(self, line):
         # ADD LINE TO OWN CHAT:
-        if len(line) > self._char_lim:
+        if len(line) > char_lim:
             logging.debug(f'unable to send line, character limit reached')
             return
         self.client_chat.send(line)
@@ -474,5 +477,8 @@ class Chat(pg.sprite.Sprite):
 
         # PRINT CURRENTLY TYPED LINE IF THERE IS ONE:
         if self.cur_typed != '':
-            text = self.font.render(self.cur_typed, True, self.color)
-            screen.blit(text, (0, count * 20))
+            try:
+                text = self.font.render(self.username + self.cur_typed, True, self.color)
+                screen.blit(text, (0, count * 20))
+            except ValueError:
+                logging.error('unable to render text')
