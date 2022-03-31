@@ -22,6 +22,7 @@ class Button(pg.sprite.Sprite):
         self.text = text
         self.target = target
         self.args = args
+        self.type = type  # BUTTON TYPE (SIGN IN OR SIGN UP)
 
     def events(self, event_list):
         """ EVENTS IN BUTTON,
@@ -289,6 +290,35 @@ def draw(screen, all_sprites, map_img, map_rect, inv, chat, camera):
     pg.display.update()
 
 
+def login_state(screen, clock):
+    # SET UP TEXT BOXES:
+    text_boxes = [TextInputBox([], (555, 305), (420, 55), 45),
+                  TextInputBox([], (555, 475), (420, 55), 45)]
+    buttons = [Button([], (825, 610), (133, 55), 0, "", log_in, None),
+               Button([], (575, 610), (133, 55), 0, "", log_in, None)]
+
+    # SETUP LOGIN SCREEN:
+    login = LoginScreen([], "login_screen.png", 602, 529)
+    img = pg.image.load(login.image)
+    screen.blit(img, (500, 140))
+    pg.display.flip()
+
+    finish = True
+    state = 'LOGIN'
+    while finish:
+        # CHECK EVENTS:
+        finish, state = login_events(text_boxes, buttons)
+        # DRAW TEXT:
+        login_draw(screen, text_boxes)
+        # REDRAW BACKGROUND:
+        screen.blit(img, (500, 140))
+        clock.tick(FPS)
+
+    username = text_boxes[0].text
+    pg.event.clear()
+    return state, username
+
+
 def run():
     logging.basicConfig(level=logging.DEBUG)
 
@@ -323,19 +353,6 @@ def run():
         }
     ]
 
-    # SETTING UP CLIENT
-
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    port = PORT if len(sys.argv) == 1 else int(sys.argv[1])
-    sock.bind((IP, port))
-    sock_client = client.Client(sock=sock, server=(SERVER_IP, SERVER_PORT), sprite_groups=sprite_groups,
-                                player_animations=player_anims, mob_animations=mob_anims[0], player_anim_speed=5,
-                                player_walk_speed=5, mob_anim_speed=15, mob_walk_speed=2)
-    sock_client.init()
-    threading.Thread(target=sock_client.receive_updates).start()
-
-    player = sock_client.main_player
-
     # SETTING UP MAP
 
     map_folder = 'maps'
@@ -352,66 +369,33 @@ def run():
     running = True
     inv = Inventory((WIDTH, HEIGHT))
 
-    # ITEMS:
-    speed_pot = Item("speed_pot", player)
-    strength_pot = Item("strength_pot", player)
-    heal_pot = Item("heal_pot", player)
-    useless_card = Item("useless_card", player)
-
-    # RANDOM INVENTORY FOR TESTING
-    player.items.add(strength_pot)
-    inv.add_item(strength_pot)
-    player.items.add(strength_pot)
-    inv.add_item(strength_pot)
-
-    player.items.add(speed_pot)
-    inv.add_item(speed_pot)
-
     state = 'LOGIN'
-    text_boxes = [TextInputBox([], (555, 305), (420, 55), 45),
-                  TextInputBox([], (555, 475), (420, 55), 45)]
-    buttons = [Button([], (825, 610), (133, 55), 0, "", log_in, None),
-               Button([], (575, 610), (133, 55), 0, "", log_in, None)]
+    state, username = login_state(screen, clock)
+
+    if state == 'QUIT':
+        pg.quit()
+        quit()
+
+    # SETTING UP CLIENT:
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    port = PORT if len(sys.argv) == 1 else int(sys.argv[1])
+    sock.bind((IP, port))
+    sock_client = client.Client(sock=sock, server=(SERVER_IP, SERVER_PORT), sprite_groups=sprite_groups,
+                                player_animations=player_anims, mob_animations=mob_anims[0], player_anim_speed=5,
+                                player_walk_speed=5, mob_anim_speed=15, mob_walk_speed=2)
+    sock_client.init(username=username)
+    threading.Thread(target=sock_client.receive_updates).start()
+    client_chat = chat_client(username)
+    client_chat.start()
+    chat = Chat(client_chat, username=username)
+    threading.Thread(target=client_chat.receive, args=(chat,)).start()
+    player = sock_client.main_player
 
     while running:
         if state == 'GAME':
             running = events(player, inv, camera, chat, sprite_groups)
             update(all_sprites, player, camera, map_rect, sprite_groups)
             draw(screen, sprite_groups["all"], map_img, map_rect, inv, chat, camera)
-
-        elif state == 'LOGIN':
-            # SETUP LOGIN SCREEN:
-            login = LoginScreen([], "login_screen.png", 602, 529)
-            img = pg.image.load(login.image)
-            screen.blit(img, (500, 140))
-            pg.display.flip()
-
-            # CONNECT TO LOAD BALANCER:
-            sock_lb = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            port_lb = 3333
-            sock_lb.bind((IP, port_lb))
-            finish = True
-            while finish:
-                # CHECK EVENTS:
-                finish, state = login_events(text_boxes, buttons)
-                # DRAW TEXT:
-                login_draw(screen, text_boxes)
-                # REDRAW BACKGROUND:
-                screen.blit(img, (500, 140))
-                clock.tick(FPS)
-
-            pg.event.clear()
-            if state == 'QUIT':
-                pg.quit()
-                quit()
-
-            username = text_boxes[0].text
-
-            client_chat = chat_client(username)
-            client_chat.start()
-            chat = Chat(client_chat, username=username)
-            threading.Thread(target=client_chat.receive, args=(chat,)).start()
-
         clock.tick(FPS)
 
     sock_client.send_update('disconnect', {'id': player.id})

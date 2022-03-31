@@ -4,13 +4,14 @@ from settings import *
 from settings import DATABASE_ERRORS
 from my_server import Player
 
-ITEMS = dict(strength_pot = 1, health_pot = 2, speed_pot = 4, usless_card = 8)
+ITEMS = dict(strength_pot=1, health_pot=2, speed_pot=4, usless_card=8)
 
-def connect_database():                                             # connection must be closed after calling this function!
+
+def connect_database():  # connection must be closed after calling this function!
     try:
         connection = connect(
-            host='localhost',                                        # 127.0.0.1
-            user='root',                                            # Change to some sort of environment variable 
+            host='localhost',  # 127.0.0.1
+            user='root',  # Change to some sort of environment variable
             password='Shmulik1sKing!',
             port=DATABASE_PORT,
             database=DATABASE_NAME,
@@ -18,9 +19,10 @@ def connect_database():                                             # connection
         return connection
     except Error as e:
         print(e)
-        return None                                                     # none (may change) means database error, needs to be handled after every call
+        return None  # none (may change) means database error, needs to be handled after every call
 
-def store_player(player: Player):   # I'm unsure about how to check this function
+
+def store_player(player: Player):  # I'm unsure about how to check this function
     with connect_database() as db:
         if db is None:
             return DATABASE_ERRORS['Connection_Error']
@@ -28,15 +30,17 @@ def store_player(player: Player):   # I'm unsure about how to check this functio
         items: int
         for item in player.items:
             items += ITEMS[str(item)]
-        query = "INSERT INTO players VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s')"%(player.username, player.id, posX, posY, player.t0, items)
+        query = "INSERT INTO players VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s')" % (
+        player.username, player.id, posX, posY, player.t0, items)
         try:
             with db.cursor() as cursor:
-                cursor.execute(query, multimode = True)
+                cursor.execute(query, multimode=True)
                 db.commit()
         except Error as e:
             print(e)
-            return(DATABASE_ERRORS['Database_Error'])
+            return (DATABASE_ERRORS['Database_Error'])
     return None
+
 
 def retrive_player(id):
     with connect_database() as db:
@@ -46,14 +50,16 @@ def retrive_player(id):
         try:
             with db.cursor() as cursor:
                 cursor.execute(query, {'ID': id})
-                result = cursor.fetchall() 
+                result = cursor.fetchall()
                 if result is None or result == []:
                     return DATABASE_ERRORS['No_Such_Player']
         except Error as e:
             print(e)
             return DATABASE_ERRORS['Database_Error']
         delete_player(id)
-        return result[0]            # temporary, needs to return new instance of player. returns now tuple (username, ID, posX, posY, t0, health, items(in binary form))                     
+        return result[
+            0]  # temporary, needs to return new instance of player. returns now tuple (username, ID, posX, posY, t0, health, items(in binary form))
+
 
 def delete_player(id):
     with connect_database() as db:
@@ -69,43 +75,46 @@ def delete_player(id):
             return DATABASE_ERRORS['Database_Error']
     return None
 
+
 def verify_account(username, password):
     with connect_database() as db:
         if db is None:
             return DATABASE_ERRORS['Connection_Error']
-        query = "SELECT password, ID FROM users WHERE username = %(username)s" 
+        query = "SELECT password, ID FROM users WHERE username = %(username)s"
         with db.cursor() as cursor:
             cursor.execute(query, {'username': username})
-            result = cursor.fetchall()                                          # returns a list with a tuple inside [(password, ID)]                                         
+            result = cursor.fetchall()  # returns a list with a tuple inside [(password, ID)]
             if result is None or result == []:
                 return DATABASE_ERRORS['No_Such_User']
             passwd, ID = result[0]
-            if password != passwd:                                              # add better checking function
-                return DATABASE_ERRORS['Wrong_Password'] 
+            if password != passwd:  # add better checking function
+                return DATABASE_ERRORS['Wrong_Password']
     return ID
+
 
 def add_account(username, password, ID):
     with connect_database() as db:
         if db is None:
             return DATABASE_ERRORS['Connection_Error']
-        if(username_exists(username)):
+        if (username_exists(username)):
             return DATABASE_ERRORS['Username_Exists']
-        query = "INSERT INTO users VALUES ('%s', '%s', '%s')"%(username, password, ID)          # check for sql injection
+        query = "INSERT INTO users VALUES ('%s', '%s', '%s')" % (username, password, ID)  # check for sql injection
         with db.cursor() as cursor:
             try:
-                cursor.execute(query, multi = True)
+                cursor.execute(query, multi=True)
                 db.commit()
                 print(query)
             except Error as e:
                 print(e)
                 return DATABASE_ERRORS['Database_Error']
-    return None                                                                          # None means it was succeseful
+    return None  # None means it was succeseful
+
 
 def remove_account(id):
     with connect_database() as db:
         if db is None:
             return DATABASE_ERRORS['Connection_Error']
-        query = "DELETE FROM users WHERE ID = %(ID)s"          # check for sql injection
+        query = "DELETE FROM users WHERE ID = %(ID)s"  # check for sql injection
         with db.cursor() as cursor:
             try:
                 cursor.execute(query, {'ID': id})
@@ -113,16 +122,17 @@ def remove_account(id):
             except Error as e:
                 print(e)
                 return DATABASE_ERRORS['Database_Error']
-    return None                                                                          # None means it was succeseful
+    return None  # None means it was succeseful
+
 
 def username_exists(username):
     with connect_database() as db:
         if db is None:
             return DATABASE_ERRORS['Connection_Error']
-        query = "SELECT username FROM users WHERE EXISTS (SELECT * FROM users WHERE username = %(username)s)"       # check if username exists
+        query = "SELECT username FROM users WHERE EXISTS (SELECT * FROM users WHERE username = %(username)s)"  # check if username exists
         with db.cursor() as cursor:
             cursor.execute(query, {'username': username})
-            result = cursor.fetchall()                                         # returns a list with a tuple inside [(password, ID)]                                         
+            result = cursor.fetchall()  # returns a list with a tuple inside [(password, ID)]
             if result:
                 return True
     return False
@@ -135,5 +145,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-
