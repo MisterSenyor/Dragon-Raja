@@ -30,6 +30,8 @@ class Button(pg.sprite.Sprite):
             if event.type == pg.MOUSEBUTTONDOWN:
                 if self.rect.collidepoint(event.pos):
                     self.target(self.args)
+                    return 'GAME'
+        return 'LOGIN'
 
     def update(self, *args, **kwargs):
         mouse = pg.mouse.get_pos()
@@ -83,6 +85,7 @@ class TextInputBox(pg.sprite.Sprite):
 
 
 def login_events(text, button):
+    state = 'LOGIN'
     all_events = pg.event.get()
     for event in all_events:
         if event.type == pg.QUIT:
@@ -90,16 +93,18 @@ def login_events(text, button):
     for t in text:
         t.events(all_events)
     for b in button:
-        b.events(all_events)
-    return True
+        state = b.events(all_events)
+        if state == 'GAME':
+            return False, state
+    return True, state
 
 def login_update():
     pass
 
-def sign_up():
+def sign_up(args):
     pass
 
-def log_in():
+def log_in(args):
     pass
 
 
@@ -245,10 +250,8 @@ def handle_mouse(player, event, inv, camera):
         return
 
 
-def events(player, inv, camera, chat, sprite_groups, text):
+def events(player, inv, camera, chat, sprite_groups):
     all_events = pg.event.get()
-    for t in text:
-        t.events(all_events)
     for event in all_events:
         if event.type == pg.QUIT:
             return False
@@ -271,7 +274,7 @@ def update(all_sprites, player, camera, map_rect, sprite_groups):
     camera.update(player)
 
 
-def draw(screen, all_sprites, map_img, map_rect, inv, chat, camera, text):
+def draw(screen, all_sprites, map_img, map_rect, inv, chat, camera):
     screen.fill(BGCOLOR)
 
     screen.blit(map_img, camera.apply_rect(map_rect))
@@ -282,8 +285,6 @@ def draw(screen, all_sprites, map_img, map_rect, inv, chat, camera, text):
     inv.render(screen)  # RENDER INVENTORY
     chat.update(screen)
 
-    for t in text:
-        t.draw(screen)
     pg.display.update()
 
 
@@ -340,12 +341,7 @@ def run():
                                 player_walk_speed=5, mob_anim_speed=15, mob_walk_speed=2)
     sock_client.init()
     threading.Thread(target=sock_client.receive_updates).start()
-    username = "moshe"
 
-    client_chat = chat_client(username)
-    client_chat.start()
-    chat = Chat(client_chat)
-    threading.Thread(target=client_chat.receive, args=(chat,)).start()
 
     player = sock_client.main_player
     create_enemies(sprite_groups, mob_anims)
@@ -385,15 +381,15 @@ def run():
     state = 'LOGIN'
     text_boxes = [TextInputBox([], (555, 305), (420, 55), 45),
                   TextInputBox([], (555, 475), (420, 55), 45)]
-    buttons = [Button([], (825, 610), (133, 55), 0, "", 0, 0),
-               Button([], (575, 610), (133, 55), 0, "", 0, 0)]
+    buttons = [Button([], (825, 610), (133, 55), 0, "", log_in, None),
+               Button([], (575, 610), (133, 55), 0, "", log_in, None)]
 
     drp_pot = Dropped("speed_pot", player.rect.center, [sprite_groups["all"], sprite_groups["dropped"]])
     while running:
         if state == 'GAME':
-            running = events(player, inv, camera, chat, sprite_groups, text_boxes)
+            running = events(player, inv, camera, chat, sprite_groups)
             update(all_sprites, player, camera, map_rect, sprite_groups)
-            draw(screen, sprite_groups["all"], map_img, map_rect, inv, chat, camera, text_boxes)
+            draw(screen, sprite_groups["all"], map_img, map_rect, inv, chat, camera)
 
         elif state == 'LOGIN':
             login = loginScreen([], "login_screen.png", 602, 529)
@@ -405,10 +401,19 @@ def run():
             sock_lb.bind((IP, port_lb))
             finish = True
             while finish:
-                finish = login_events(text_boxes, buttons)
+                finish, state = login_events(text_boxes, buttons)
                 login_draw(screen, text_boxes)
                 login_draw(screen, buttons)
                 clock.tick(FPS)
+
+            pg.event.clear()
+
+            username = text_boxes[0].text
+
+            client_chat = chat_client(username)
+            client_chat.start()
+            chat = Chat(client_chat)
+            threading.Thread(target=client_chat.receive, args=(chat,)).start()
 
         clock.tick(FPS)
 
