@@ -30,8 +30,8 @@ class Button(pg.sprite.Sprite):
             if event.type == pg.MOUSEBUTTONDOWN:
                 if self.rect.collidepoint(event.pos):
                     self.target(self.args)
-                    return 'GAME'
-        return 'LOGIN'
+                    return False
+        return True
 
     def update(self, *args, **kwargs):
         mouse = pg.mouse.get_pos()
@@ -85,7 +85,7 @@ class TextInputBox(pg.sprite.Sprite):
 
 
 def login_events(text, button):
-    state = 'LOGIN'
+    finish = True
     all_events = pg.event.get()
     for event in all_events:
         if event.type == pg.QUIT:
@@ -93,10 +93,8 @@ def login_events(text, button):
     for t in text:
         t.events(all_events)
     for b in button:
-        state = b.events(all_events)
-        if state == 'GAME':
-            return False, state
-    return True, state
+        finish = b.events(all_events)
+    return finish
 
 def login_update():
     pass
@@ -331,6 +329,35 @@ def run():
         }
     ]
 
+    state = 'LOGIN'
+    text_boxes = [TextInputBox([], (555, 305), (420, 55), 45),
+                  TextInputBox([], (555, 475), (420, 55), 45)]
+    buttons = [Button([], (825, 610), (133, 55), 0, "", sign_up, None),
+               Button([], (575, 610), (133, 55), 0, "", log_in, None)]
+
+    if state == 'LOGIN':
+        login = loginScreen([], "login_screen.png", 602, 529)
+        img = pg.image.load(login.image)
+        screen.blit(img, (500, 140))
+        pg.display.flip()
+        sock_lb = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        port_lb = 3333
+        sock_lb.bind((IP, port_lb))
+        finish = True
+        while finish:
+            finish = login_events(text_boxes, buttons)
+            login_draw(screen, text_boxes)
+            clock.tick(FPS)
+
+        pg.event.clear()
+
+    username = text_boxes[0].text
+
+    client_chat = chat_client(username)
+    client_chat.start()
+    chat = Chat(client_chat)
+    threading.Thread(target=client_chat.receive, args=(chat,)).start()
+
     # SETTING UP CLIENT
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -378,42 +405,12 @@ def run():
 
     inv.add_item(speed_pot)
 
-    state = 'LOGIN'
-    text_boxes = [TextInputBox([], (555, 305), (420, 55), 45),
-                  TextInputBox([], (555, 475), (420, 55), 45)]
-    buttons = [Button([], (825, 610), (133, 55), 0, "", log_in, None),
-               Button([], (575, 610), (133, 55), 0, "", log_in, None)]
 
     drp_pot = Dropped("speed_pot", player.rect.center, [sprite_groups["all"], sprite_groups["dropped"]])
     while running:
-        if state == 'GAME':
-            running = events(player, inv, camera, chat, sprite_groups)
-            update(all_sprites, player, camera, map_rect, sprite_groups)
-            draw(screen, sprite_groups["all"], map_img, map_rect, inv, chat, camera)
-
-        elif state == 'LOGIN':
-            login = loginScreen([], "login_screen.png", 602, 529)
-            img = pg.image.load(login.image)
-            screen.blit(img, (500, 140))
-            pg.display.flip()
-            sock_lb = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            port_lb = 3333
-            sock_lb.bind((IP, port_lb))
-            finish = True
-            while finish:
-                finish, state = login_events(text_boxes, buttons)
-                login_draw(screen, text_boxes)
-                login_draw(screen, buttons)
-                clock.tick(FPS)
-
-            pg.event.clear()
-
-            username = text_boxes[0].text
-
-            client_chat = chat_client(username)
-            client_chat.start()
-            chat = Chat(client_chat)
-            threading.Thread(target=client_chat.receive, args=(chat,)).start()
+        running = events(player, inv, camera, chat, sprite_groups)
+        update(all_sprites, player, camera, map_rect, sprite_groups)
+        draw(screen, sprite_groups["all"], map_img, map_rect, inv, chat, camera)
 
         clock.tick(FPS)
 
