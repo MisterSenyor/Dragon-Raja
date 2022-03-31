@@ -22,7 +22,6 @@ class Button(pg.sprite.Sprite):
         self.text = text
         self.target = target
         self.args = args
-        self.type = type  # BUTTON TYPE (SIGN IN OR SIGN UP)
 
     def events(self, event_list):
         """ EVENTS IN BUTTON,
@@ -116,24 +115,6 @@ def login_draw(screen, text):
     pg.display.update()
 
 
-def drop_item(player, inv: Inventory, sprite_groups):
-    """ DROPS ITEM FROM CURRENT SLOT ON THE GROUND"""
-    # GET CUR ITEM:
-    item = inv.slots[inv.cur_slot]
-
-    # CHECK IF CUR SLOT IS EMPTY:
-    if item != 0:
-        # REMOVE FROM INVENTORY
-        inv.remove_item(inv.cur_slot)
-
-        # CHECK IN WHICH DIRECTION TO DROP ITEM:
-        if player.direction == 1:
-            pos = player.rect.topleft
-        else:
-            pos = player.rect.topright
-        dropped_item = Dropped(item.item_type, pos, [sprite_groups["all"], sprite_groups["dropped"]])
-
-
 def pick_item(player, inv: Inventory, sprite_groups):
     """" PICKS UP ITEM:
     CHECKS IF INVENTORY IS FULL,
@@ -168,7 +149,7 @@ def update_dir(player: Entity, camera):
         player.direction = 1
 
 
-def handle_keyboard(player, inv, camera, key, chat, sprite_groups):
+def handle_keyboard(player: MainPlayer, inv, camera, key, chat, sprite_groups):
     if key == 120:  # X KEY
         update_dir(player, camera)
         player.melee_attack()
@@ -199,7 +180,7 @@ def handle_keyboard(player, inv, camera, key, chat, sprite_groups):
         player.use_skill(1, sprite_groups, inv)
 
     elif key == 113:  # Q KEY
-        drop_item(player, inv, sprite_groups)
+        player.drop_item(inv)
 
     elif key == 98:
         pick_item(player, inv, sprite_groups)
@@ -291,6 +272,10 @@ def draw(screen, all_sprites, map_img, map_rect, inv, chat, camera):
 
 
 def login_state(screen, clock):
+    """ LOGIN STATE MAIN LOOP FUNCTION:
+    RETURNS GAME STATE, USERNAME, PASSWORD
+    """
+
     # SET UP TEXT BOXES:
     text_boxes = [TextInputBox([], (555, 305), (420, 55), 45),
                   TextInputBox([], (555, 475), (420, 55), 45)]
@@ -315,8 +300,9 @@ def login_state(screen, clock):
         clock.tick(FPS)
 
     username = text_boxes[0].text
+    password = text_boxes[1].text
     pg.event.clear()
-    return state, username
+    return state, username, text_boxes
 
 
 def run():
@@ -369,10 +355,12 @@ def run():
     running = True
     inv = Inventory((WIDTH, HEIGHT))
 
+
     state = 'LOGIN'
-    state, username = login_state(screen, clock)
+    state, username, password = login_state(screen, clock)
 
     if state == 'QUIT':
+        # QUIT GAME
         pg.quit()
         quit()
 
@@ -383,13 +371,25 @@ def run():
     sock_client = client.Client(sock=sock, server=(SERVER_IP, SERVER_PORT), sprite_groups=sprite_groups,
                                 player_animations=player_anims, mob_animations=mob_anims[0], player_anim_speed=5,
                                 player_walk_speed=5, mob_anim_speed=15, mob_walk_speed=2)
+    # SOCK:
     sock_client.init(username=username)
-    threading.Thread(target=sock_client.receive_updates).start()
+    sock_thread = threading.Thread(target=sock_client.receive_updates)
+    sock_thread.daemon = True
+    sock_thread.start()
+
+    # CHAT:
     client_chat = chat_client(username)
     client_chat.start()
     chat = Chat(client_chat, username=username)
-    threading.Thread(target=client_chat.receive, args=(chat,)).start()
+    chat_thread = threading.Thread(target=client_chat.receive, args=(chat,))
+    chat_thread.daemon = True
+    chat_thread.start()
     player = sock_client.main_player
+
+    speed_pot = Item("speed_pot", player)
+    inv.add_item(speed_pot)
+    player.items.add(speed_pot)
+
 
     while running:
         if state == 'GAME':

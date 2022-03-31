@@ -39,6 +39,7 @@ class Client:
         self.entity_sprite_groups = [self.sprite_groups['all'], self.sprite_groups['entity']]
         self.projectile_sprite_groups = [self.sprite_groups['all'], self.sprite_groups['projectiles']]
         self.player_sprite_groups = self.entity_sprite_groups + [self.sprite_groups['players']]
+        self.dropped_sprite_groups = [self.sprite_groups['all'], self.sprite_groups['dropped']]
 
     def send_update(self, cmd: str, params: dict):
         self.sock.sendto(json.dumps({'cmd': cmd, **params}).encode() + b'\n', self.server)
@@ -62,6 +63,9 @@ class Client:
         entities.Projectile(proj_type=data['type'], attacker=self.get_entity_by_id(data['attacker_id']),
                             sprite_groups=self.projectile_sprite_groups, vect=pygame.Vector2(data['target']),
                             send_update=False)
+
+    def create_dropped(self, data):
+        entities.Dropped(item_type=data['item_type'], pos=data['pos'], sprite_groups=self.dropped_sprite_groups)
 
     def init(self, username='ariel'):
         self.send_update('connect', {'username': username})
@@ -87,7 +91,6 @@ class Client:
     def handle_update(self, update: dict):
         cmd = update['cmd']
         player_ids = [player.id for player in self.sprite_groups['players'].sprites()]
-
         if cmd == 'player_enters':
             if update['player']['id'] not in player_ids:
                 self.create_player(update['player'])
@@ -95,6 +98,9 @@ class Client:
             self.create_projectile(update['projectile'])
         elif cmd == 'collisions':
             pass
+        elif cmd == 'item_dropped':
+            self.create_dropped(update['item'])
+
         elif update['id'] != self.main_player.id:
             entity = self.get_entity_by_id(update['id'])
 
@@ -108,6 +114,7 @@ class Client:
                 item.use_item(send_update=False)
             elif cmd == 'player_leaves':
                 entity.kill()
+
 
     def receive_updates(self):
         while True:

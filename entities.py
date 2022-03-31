@@ -193,7 +193,23 @@ class MainPlayer(Player):
     def use_skill(self, skill_id, sprite_groups, inv, send_update=True):
         super(MainPlayer, self).use_skill(skill_id, sprite_groups, inv)
         if send_update:
-            self.client.send_update('use_skill', {'id': self.id, 'skill_id': skill_id})
+            self.client.send_update('use_skill',
+                                    {'id': self.id, 'skill_id': skill_id})
+
+    def drop_item(self, inv, send_update=True):
+        """ DROPS ITEM FROM CURRENT SLOT ON THE GROUND"""
+        item = inv.slots[inv.cur_slot]
+        # CHECK IF CUR SLOT IS EMPTY:
+        if item != 0:
+            # REMOVE FROM INVENTORY
+            inv.remove_item(inv.cur_slot)
+            # CHECK IN WHICH DIRECTION TO DROP ITEM:
+            if self.direction == 1:
+                pos = self.rect.topleft
+            else:
+                pos = self.rect.topright
+            if send_update:
+                self.client.send_update('item_dropped', {'id': self.id, 'item': {'item_type': item.item_type, 'pos': pos}})
 
 
 class Mob(Entity):
@@ -290,9 +306,10 @@ class Item(pg.sprite.Sprite):
 
 
 class Dropped(pg.sprite.Sprite):
-    def __init__(self, item_type: str, pos: tuple, sprite_groups):
+    def __init__(self, item_type: str, pos: tuple, sprite_groups, id: int = 1):
         self.groups = sprite_groups
         pg.sprite.Sprite.__init__(self, *self.groups)
+        self.id = id
         self.item_type = item_type
         self.image = pg.image.load('graphics/items/' + item_type + ".png")
         self.rect = self.image.get_rect()
