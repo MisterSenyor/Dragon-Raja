@@ -196,7 +196,7 @@ class MainPlayer(Player):
             self.client.send_update('use_skill',
                                     {'id': self.id, 'skill_id': skill_id})
 
-    def drop_item(self, inv, send_update=True):
+    def drop_item(self, inv, sprite_groups, send_update=True):
         """ DROPS ITEM FROM CURRENT SLOT ON THE GROUND"""
         item = inv.slots[inv.cur_slot]
         # CHECK IF CUR SLOT IS EMPTY:
@@ -209,7 +209,29 @@ class MainPlayer(Player):
             else:
                 pos = self.rect.topright
             if send_update:
-                self.client.send_update('item_dropped', {'id': self.id, 'item': {'item_type': item.item_type, 'pos': pos}})
+                self.client.send_update('item_dropped', {'item_id': item.item_id, 'id': self.id})
+
+    def pick_item(self, inv: 'Inventory', sprite_groups, send_update=True):
+        """" PICKS UP ITEM:
+        CHECKS IF INVENTORY IS FULL,
+        CHECKS COLLISION WITH DROPPED ITEMS,
+        REMOVES DROPPED ITEM FROM ITS GROUPS AND ADDS ITEM TO INVENTORY"""
+
+        # CHECK INV:
+        if inv.is_full():
+            print("INV FULL")
+            return
+
+        # GO OVER ALL DROPPED ITEMS:
+        for sprite in sprite_groups["dropped"]:
+            # CHECK COLLISION WITH PLAYER:
+            if pg.sprite.collide_rect(self, sprite):
+                # ADD ITEM TO INV AND PLAYER ITEMS:
+                item = Item(sprite.item_type, self, sprite.item_id)
+                inv.add_item(item)
+                self.items.add(item)
+                if send_update:
+                    self.client.send_update('item_picked', {'id': self.id, 'item_id': item.item_id})
 
     def handle_death(self):
         super(MainPlayer, self).handle_death()
@@ -261,9 +283,10 @@ class Mob(Entity):
 class Item(pg.sprite.Sprite):
     """" ITEM CLASS, GETS ITEM TYPE, OWNER (ENTITY)"""
 
-    def __init__(self, item_type, owner):
+    def __init__(self, item_type, owner, item_id):
         self.group = owner.items
         self.item_type = item_type
+        self.item_id = item_id
         self.owner = owner
         self.image = pg.image.load('graphics/items/' + item_type + ".png")
         self.rect = self.image.get_rect()
@@ -311,14 +334,14 @@ class Item(pg.sprite.Sprite):
 
 
 class Dropped(pg.sprite.Sprite):
-    def __init__(self, item_type: str, pos: tuple, sprite_groups, id: int = 1):
+    def __init__(self, item_type: str, pos: tuple, sprite_groups, item_id: int = 1):
         self.groups = sprite_groups
-        pg.sprite.Sprite.__init__(self, *self.groups)
-        self.id = id
+        self.item_id = item_id
         self.item_type = item_type
         self.image = pg.image.load('graphics/items/' + item_type + ".png")
         self.rect = self.image.get_rect()
         self.rect.topleft = pos
+        pg.sprite.Sprite.__init__(self, *self.groups)
 
     def update(self, *args):
         pass

@@ -115,30 +115,6 @@ def login_draw(screen, text):
     pg.display.update()
 
 
-def pick_item(player, inv: Inventory, sprite_groups):
-    """" PICKS UP ITEM:
-    CHECKS IF INVENTORY IS FULL,
-    CHECKS COLLISION WITH DROPPED ITEMS,
-    REMOVES DROPPED ITEM FROM ITS GROUPS AND ADDS ITEM TO INVENTORY"""
-
-    # CHECK INV:
-    if inv.is_full():
-        print("INV FULL")
-        return
-
-    # GO OVER ALL DROPPED ITEMS:
-    for sprite in sprite_groups["dropped"]:
-        # CHECK COLLISION WITH PLAYER:
-        if pg.sprite.collide_rect(player, sprite):
-            # ADD ITEM TO INV AND PLAYER ITEMS:
-            item = Item(sprite.item_type, player)
-            inv.add_item(item)
-            player.items.add(item)
-
-            # REMOVE DROPPED ITEM FROM SPRITE GROUPS:
-            sprite.remove(sprite_groups["all"], sprite_groups["dropped"])
-
-
 def update_dir(player: Entity, camera):
     """ UPDATES PLAYER DIRECTION ACCORDING TO
     MOUSE POS (0 = RIGHT, 1 = LEFT) """
@@ -180,10 +156,10 @@ def handle_keyboard(player: MainPlayer, inv, camera, key, chat, sprite_groups):
         player.use_skill(1, sprite_groups, inv)
 
     elif key == 113:  # Q KEY
-        player.drop_item(inv)
+        player.drop_item(inv, sprite_groups)
 
     elif key == 98:
-        pick_item(player, inv, sprite_groups)
+        player.pick_item(inv, sprite_groups)
 
     elif key == 116:  # T KEY - CHAT
         chat.is_pressed = True
@@ -374,17 +350,20 @@ def run():
     sock_thread = threading.Thread(target=sock_client.receive_updates)
     sock_thread.start()
 
+    player = sock_client.main_player
+    for item in player.items:
+        inv.add_item(item)
+
     # CHAT:
     client_chat = chat_client(username)
     client_chat.start()
     chat = Chat(client_chat, username=username)
     chat_thread = threading.Thread(target=client_chat.receive, args=(chat,))
     chat_thread.start()
-    player = sock_client.main_player
 
-    speed_pot = Item("speed_pot", player)
-    inv.add_item(speed_pot)
-    player.items.add(speed_pot)
+    # speed_pot = Item("speed_pot", player)
+    # inv.add_item(speed_pot)
+    # player.items.add(speed_pot)
 
 
     while running:

@@ -43,22 +43,19 @@ class MyJSONEncoder(json.JSONEncoder):
             data = o.__dict__.copy()
             del data['t0']
             data['start_pos'] = o.get_pos(t)
+            if isinstance(o, Player) and not isinstance(o, MainPlayer):
+                del data['items']
             return data
+        if isinstance(o, Dropped):
+            return o.__dict__.copy()
         return super(MyJSONEncoder, self).default(o)
 
 
 @dataclass
-class Item:
-    item_type: str
-    t0: int
-
-
-@dataclass
 class Dropped:
-    id: int
+    item_id: int
     item_type: str
     pos: Tuple[int, int]
-
 
 
 @dataclass
@@ -69,7 +66,7 @@ class MovingObject(ABC):
 
     def __post_init__(self):
         if self.id is None:
-            self.id = random.randint(0, 99999)
+            self.id = generate_id()
 
     @abstractmethod
     def get_pos(self, t: int = None):
@@ -84,7 +81,6 @@ class MovingObject(ABC):
 class Entity(MovingObject, ABC):
     end_pos: Optional[Tuple[int, int]]
     health: int
-    items: List[Item]
 
     def __post_init__(self):
         super(Entity, self).__post_init__()
@@ -114,12 +110,18 @@ class Entity(MovingObject, ABC):
 @dataclass
 class Player(Entity):
     username: str
+    items: Dict[str, str]  # ids are numbers converted to strings, e.g "123"
 
     def get_damage(self):
         return 20
 
     def get_speed(self):
         return 5
+
+
+# used for encoding items
+class MainPlayer(Player):
+    pass
 
 
 @dataclass
@@ -149,6 +151,16 @@ class Mob(Entity):
         return 2
 
 
+def generate_id(max_n=100000):
+    id_ = random.randint(1, max_n)
+    while id_ in generate_id.ids:
+        id_ = random.randint(1, max_n)
+    return id_
+
+
+generate_id.ids = set()
+
+
 class Server:
     def __init__(self, sock: socket.socket):
         self.socket = sock
@@ -157,6 +169,7 @@ class Server:
         self.players: Dict[int, Player] = {}
         self.mobs: Dict[int, Mob] = {}
         self.projectiles: Dict[int, Projectile] = {}
+        self.dropped: Dict[int, Dropped] = {}
         self.updates = []
         self.attacking_players: List[int] = []  # attacking players' ids
 
@@ -170,7 +183,7 @@ class Server:
                     start_pos=(random.randint(0, settings.MAP_SIZE[0] - 1),
                                random.randint(0, settings.MAP_SIZE[1] - 1)),
                     end_pos=None,
-                    health=100, t0=0, items=[])
+                    health=100, t0=0)
             self.mobs[m.id] = m
 
     def update_mobs(self):
@@ -195,8 +208,9 @@ class Server:
                     self.updates.append({'cmd': 'projectile', 'projectile': proj, 'id': m.id})
 
     def connect(self, data, address):
-        player = Player(id=None, start_pos=(1400, 1360), end_pos=None,
-                        health=100, items=[], t0=0, username=data['username'])
+        items = {str(generate_id()): "speed_pot"}
+        player = MainPlayer(id=None, start_pos=(1400, 1360), end_pos=None,
+                            health=100, items=items, t0=0, username=data['username'])
         self.updates.append({'cmd': 'player_enters', 'player': player})
 
         data = json.dumps({
@@ -204,7 +218,8 @@ class Server:
             'main_player': player,
             'players': list(self.players.values()),
             'mobs': list(self.mobs.values()),
-            'projectiles': list(self.projectiles.values())
+            'projectiles': list(self.projectiles.values()),
+            'dropped': list(self.dropped.values())
         }, cls=MyJSONEncoder).encode() + b'\n'
         send_all(self.socket, data, address)
 
@@ -285,7 +300,18 @@ class Server:
         elif cmd == 'attack':
             self.attacking_players.append(player.id)
         elif cmd == 'item_dropped':
-            dropped = Dropped(random.randint(1, 65536), **data['item'])
+            item_type = player.items[data['item_id']]
+            dropped = Dropped(item_type=item_type, item_id=data['item_id'], pos=player.get_pos(t))
+            self.dropped[dropped.item_id] = dropped
+            data = {'cmd': cmd, 'item_type': dropped.item_type, 'item_id': dropped.item_id, 'pos': dropped.pos}
+        elif cmd == 'item_picked':
+            dropped = self.dropped[data['item_id']]
+            if dist(dropped.pos, player.get_pos(t)) < 100:
+                del self.dropped[data['item_id']]
+                player.items[dropped.item_id] = dropped.item_type
+                del data['id']
+            else:
+                raise Exception('bad client, cannot pickup item')
         self.updates.append(data)
 
     def receive_packets(self):
