@@ -1,8 +1,3 @@
-import socket
-
-# IP = socket.gethostbyname(socket.gethostname())
-IP = '127.0.0.1'
-PORT = 13337
 
 SERVER_IP = '127.0.0.1'
 SERVER_PORT = 2222

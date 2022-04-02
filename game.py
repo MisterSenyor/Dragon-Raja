@@ -366,15 +366,12 @@ def run():
 
     # SETTING UP CLIENT:
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    port = PORT if len(sys.argv) == 1 else int(sys.argv[1])
-    sock.bind((IP, port))
     sock_client = client.Client(sock=sock, server=(SERVER_IP, SERVER_PORT), sprite_groups=sprite_groups,
                                 player_animations=player_anims, mob_animations=mob_anims[0], player_anim_speed=5,
                                 player_walk_speed=5, mob_anim_speed=15, mob_walk_speed=2)
     # SOCK:
     sock_client.init(username=username)
     sock_thread = threading.Thread(target=sock_client.receive_updates)
-    sock_thread.daemon = True
     sock_thread.start()
 
     # CHAT:
@@ -382,7 +379,6 @@ def run():
     client_chat.start()
     chat = Chat(client_chat, username=username)
     chat_thread = threading.Thread(target=client_chat.receive, args=(chat,))
-    chat_thread.daemon = True
     chat_thread.start()
     player = sock_client.main_player
 
