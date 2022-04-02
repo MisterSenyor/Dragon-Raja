@@ -53,7 +53,7 @@ class MyJSONEncoder(json.JSONEncoder):
 
 @dataclass
 class Dropped:
-    item_id: int
+    item_id: str
     item_type: str
     pos: Tuple[int, int]
 
@@ -161,6 +161,10 @@ def generate_id(max_n=100000):
 generate_id.ids = set()
 
 
+def random_drop_pos(pos):
+    return pos[0] + random.randint(-50, 50), pos[1] + random.randint(-100, 100)
+
+
 class Server:
     def __init__(self, sock: socket.socket):
         self.socket = sock
@@ -169,7 +173,7 @@ class Server:
         self.players: Dict[int, Player] = {}
         self.mobs: Dict[int, Mob] = {}
         self.projectiles: Dict[int, Projectile] = {}
-        self.dropped: Dict[int, Dropped] = {}
+        self.dropped: Dict[str, Dropped] = {}
         self.updates = []
         self.attacking_players: List[int] = []  # attacking players' ids
 
@@ -238,13 +242,27 @@ class Server:
 
     def deal_damage(self, entity: Entity, damage: int):
         entity.health -= damage
-        if entity.health < 0:
+        if entity.health <= 0:
+            pos = entity.get_pos()
             if isinstance(entity, Player):
                 if entity.id in self.players:
                     del self.players[entity.id]
+                    drops = []
+                    for item_id, item_type in entity.items.items():
+                        drops.append(Dropped(
+                            item_id=item_id, item_type=item_type,
+                            pos=random_drop_pos(pos)))
             elif isinstance(entity, Mob):
                 if entity.id in self.mobs:
                     del self.mobs[entity.id]
+                drops = [Dropped(
+                    item_id=str(generate_id()),
+                    item_type=random.choice(['strength_pot', 'heal_pot', 'speed_pot', 'useless_card']),
+                    pos=random_drop_pos(pos))
+                    for _ in range(random.randint(2, 3))]
+            for drop in drops:
+                self.dropped[drop.item_id] = drop
+            self.updates.append({'cmd': 'entity_died', 'id': entity.id, 'drops': drops})
             logging.debug(f'entity died: {entity=}')
 
     def handle_collision(self, o1, o2) -> bool:
@@ -300,13 +318,13 @@ class Server:
         elif cmd == 'attack':
             self.attacking_players.append(player.id)
         elif cmd == 'item_dropped':
-            item_type = player.items[data['item_id']]
-            dropped = Dropped(item_type=item_type, item_id=data['item_id'], pos=player.get_pos(t))
+            item_type = player.items.pop(data['item_id'])
+            dropped = Dropped(item_type=item_type, item_id=data['item_id'], pos=random_drop_pos(player.get_pos(t)))
             self.dropped[dropped.item_id] = dropped
             data = {'cmd': cmd, 'item_type': dropped.item_type, 'item_id': dropped.item_id, 'pos': dropped.pos}
         elif cmd == 'item_picked':
             dropped = self.dropped[data['item_id']]
-            if dist(dropped.pos, player.get_pos(t)) < 100:
+            if dist(dropped.pos, player.get_pos(t)) < 100 and len(player.items) < settings.INVENTORY_SIZE:
                 del self.dropped[data['item_id']]
                 player.items[dropped.item_id] = dropped.item_type
                 del data['id']

@@ -111,6 +111,11 @@ class Client:
         elif cmd == 'item_picked':
             dropped = self.get_dropped_by_id(update['item_id'])
             dropped.kill()
+        elif cmd == 'entity_died':
+            # entity = self.get_entity_by_id(update['id'])
+            # entity.kill()
+            for drop_data in update['drops']:
+                self.create_dropped(drop_data)
         elif update['id'] != self.main_player.id:
             entity = self.get_entity_by_id(update['id'])
 

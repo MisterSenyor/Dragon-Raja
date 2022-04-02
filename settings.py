@@ -34,3 +34,5 @@ PEACEFUL_MODE = False
 char_lim = 20  # chat text char lim
 
 username_lim = 20  # username character limit
+
+INVENTORY_SIZE = 15
