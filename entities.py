@@ -353,7 +353,7 @@ class Dropped(pg.sprite.Sprite):
 class Inventory:
     def __init__(self, screen_size):
         self.slots = []
-        for i in range(0, 15):
+        for i in range(INVENTORY_SIZE):
             self.slots.append(0)
         self.image = pg.image.load("Graphics/Inventory.png")
         self.rect = self.image.get_rect()
@@ -368,7 +368,7 @@ class Inventory:
         screen.blit(self.image, self.rect)
 
         # DRAW SLOTS AND ITEMS:
-        for i in range(0, 15):
+        for i in range(INVENTORY_SIZE):
             text = self.font.render(str(i + 1), True, (0, 0, 0))
             screen.blit(text, (self.rect.midleft[0] + i * 40, self.rect.midleft[1]))  # NUM
 
@@ -384,14 +384,14 @@ class Inventory:
 
     def is_full(self):
         """ RETURNS TRUE IF INVENTORY IS FULL, IF NO SLOTS AVAILABLE RETURNS FALSE"""
-        for i in range(0, 15):
+        for i in range(INVENTORY_SIZE):
             if self.slots[i] == 0:
                 return False
         return True
 
     def add_item(self, item: Item, send_updates=False):
         """" ADD ITEM TO FIRST EMPTY SLOT"""
-        for i in range(0, 15):
+        for i in range(INVENTORY_SIZE):
             if self.slots[i] == 0:
                 self.slots[i] = item
                 return
