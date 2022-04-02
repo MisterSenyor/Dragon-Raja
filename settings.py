@@ -34,3 +34,7 @@ CHUNK_SIZE = 100
 LB_ADDRESS = ('127.0.0.1', 13579)
 
 MAP_SIZE = (10000, 5000)  # change to real value
+
+char_lim = 20  # chat text char lim
+
+username_lim = 20  # username character limit

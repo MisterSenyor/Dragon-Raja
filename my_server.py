@@ -54,6 +54,14 @@ class Item:
 
 
 @dataclass
+class Dropped:
+    id: int
+    item_type: str
+    pos: Tuple[int, int]
+
+
+
+@dataclass
 class MovingObject(ABC):
     id: Optional[int]
     start_pos: Tuple[int, int]
@@ -276,6 +284,8 @@ class Server:
             self.projectiles[proj.id] = proj
         elif cmd == 'attack':
             self.attacking_players.append(player.id)
+        elif cmd == 'item_dropped':
+            dropped = Dropped(random.randint(1, 65536), **data['item'])
         self.updates.append(data)
 
     def receive_packets(self):
