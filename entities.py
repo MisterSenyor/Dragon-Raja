@@ -1,7 +1,7 @@
 import logging
 import random
 from typing import Iterable
-
+import sys
 import pygame as pg
 
 import client
@@ -123,7 +123,7 @@ class Entity(pg.sprite.Sprite):
 
     def handle_death(self):
         self.change_status('death')
-        self.remove(self.groups)
+        self.kill()
 
 
 class Player(Entity):
@@ -194,6 +194,11 @@ class MainPlayer(Player):
         super(MainPlayer, self).use_skill(skill_id, sprite_groups, inv)
         if send_update:
             self.client.send_update('use_skill', {'id': self.id, 'skill_id': skill_id})
+
+    def handle_death(self):
+        super(MainPlayer, self).handle_death()
+        pg.quit()
+        sys.exit()
 
 
 class Mob(Entity):

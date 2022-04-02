@@ -217,9 +217,11 @@ class Server:
         entity.health -= damage
         if entity.health < 0:
             if isinstance(entity, Player):
-                del self.players[entity.id]
+                if entity.id in self.players:
+                    del self.players[entity.id]
             elif isinstance(entity, Mob):
-                del self.mobs[entity.id]
+                if entity.id in self.mobs:
+                    del self.mobs[entity.id]
             logging.debug(f'entity died: {entity=}')
 
     def handle_collision(self, o1, o2) -> bool:
