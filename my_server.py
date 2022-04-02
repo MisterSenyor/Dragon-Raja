@@ -181,7 +181,7 @@ class Server:
             m.move(t=t, pos=(pos[0] + random.randint(-500, 500), pos[1] + random.randint(-500, 500)))
             logging.debug(f'mob moved: {m=}')
             self.updates.append({'cmd': 'move', 'pos': m.end_pos, 'id': m.id})
-        if self.players:
+        if self.players and not settings.PEACEFUL_MODE:
             for _ in range(int(0.1 * len(self.mobs))):
                 m = random.choice(list(self.mobs.values()))
                 m_pos = m.get_pos(t)
