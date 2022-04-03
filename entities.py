@@ -209,7 +209,8 @@ class MainPlayer(Player):
             else:
                 pos = self.rect.topright
             if send_update:
-                self.client.send_update('item_dropped', {'item_id': item.item_id, 'id': self.id})
+                self.client.send_update('item_dropped', {'item_id': item.item_id, 'id': self.id, 'pos': self.rect.center})
+            item.kill()
 
     def pick_item(self, inv: 'Inventory', sprite_groups, send_update=True):
         """" PICKS UP ITEM:
@@ -232,6 +233,18 @@ class MainPlayer(Player):
                 self.items.add(item)
                 if send_update:
                     self.client.send_update('item_picked', {'id': self.id, 'item_id': item.item_id})
+
+    def use_item(self, inv, sprite_groups, send_update=True):
+        """ USES ITEM FROM CURRENT SLOT"""
+        item = inv.slots[inv.cur_slot]
+        # CHECK IF CUR SLOT IS EMPTY:
+        if item != 0:
+            # REMOVE FROM INVENTORY
+            inv.remove_item(inv.cur_slot)
+            # CHECK IN WHICH DIRECTION TO DROP ITEM:
+            if send_update:
+                self.client.send_update('use_item', {'item_id': item.item_id, 'id': self.id})
+            item.kill()
 
     def handle_death(self):
         super(MainPlayer, self).handle_death()
@@ -283,7 +296,7 @@ class Mob(Entity):
 class Item(pg.sprite.Sprite):
     """" ITEM CLASS, GETS ITEM TYPE, OWNER (ENTITY)"""
 
-    def __init__(self, item_type, owner, item_id):
+    def __init__(self, item_type, owner: Entity, item_id = 1):
         self.group = owner.items
         self.item_type = item_type
         self.item_id = item_id

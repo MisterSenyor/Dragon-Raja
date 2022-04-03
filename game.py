@@ -147,12 +147,7 @@ def handle_keyboard(player: MainPlayer, inv, camera, key, chat, sprite_groups):
         update_dir(player, camera)
 
     elif key == 114:  # R KEY
-        item = inv.slots[inv.cur_slot]
-        # CHECK IF EMPTY SLOT
-        if item != 0:
-            # USE ITEM:
-            item.use_item()
-            inv.remove_item(inv.cur_slot)
+        player.use_item(inv, sprite_groups)
 
     elif key == 103:  # G KEY
         player.use_skill(1, sprite_groups, inv)
@@ -160,7 +155,7 @@ def handle_keyboard(player: MainPlayer, inv, camera, key, chat, sprite_groups):
     elif key == 113:  # Q KEY
         player.drop_item(inv, sprite_groups)
 
-    elif key == 98:
+    elif key == 98: # B KEY
         player.pick_item(inv, sprite_groups)
 
     elif key == 116:  # T KEY - CHAT
