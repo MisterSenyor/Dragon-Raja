@@ -4,6 +4,8 @@ import threading
 from os import path
 from random import randint, choice
 
+import client
+import new_client
 from Tilemap import *
 from animated_sprite import *
 from entities import *
@@ -342,9 +344,16 @@ def run():
 
     # SETTING UP CLIENT:
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock_client = client.Client(sock=sock, server=(SERVER_IP, SERVER_PORT), sprite_groups=sprite_groups,
-                                player_animations=player_anims, mob_animations=mob_anims[0], player_anim_speed=5,
-                                player_walk_speed=5, mob_anim_speed=15, mob_walk_speed=2)
+    if MULTIPLE_SERVERS:
+        sock_client = new_client.NewClient(sock=sock, server=(SERVER_IP, SERVER_PORT), sprite_groups=sprite_groups,
+                                           player_animations=player_anims, mob_animations=mob_anims[0],
+                                           player_anim_speed=5, player_walk_speed=5, mob_anim_speed=15,
+                                           mob_walk_speed=2, lb_address=LB_ADDRESS)
+    else:
+        sock_client = client.Client(sock=sock, server=(SERVER_IP, SERVER_PORT), sprite_groups=sprite_groups,
+                                    player_animations=player_anims, mob_animations=mob_anims[0],
+                                    player_anim_speed=5, player_walk_speed=5, mob_anim_speed=15,
+                                    mob_walk_speed=2)
     # SOCK:
     sock_client.init(username=username)
     sock_thread = threading.Thread(target=sock_client.receive_updates)
