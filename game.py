@@ -153,7 +153,7 @@ def handle_keyboard(player: MainPlayer, inv, camera, key, chat, sprite_groups):
     elif key == 113:  # Q KEY
         player.drop_item(inv, sprite_groups)
 
-    elif key == 98:
+    elif key == 98: # B KEY
         player.pick_item(inv, sprite_groups)
 
     elif key == 116:  # T KEY - CHAT

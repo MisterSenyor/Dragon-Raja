@@ -185,7 +185,6 @@ class MainPlayer(Player):
         if send_update:
             self.client.send_update('move', {'id': self.id, 'pos': [x, y]})
 
-
     def melee_attack(self, send_update=True):
         super(MainPlayer, self).melee_attack()
         if send_update:
@@ -245,7 +244,7 @@ class MainPlayer(Player):
             # CHECK IN WHICH DIRECTION TO DROP ITEM:
             if send_update:
                 self.client.send_update('use_item', {'item_id': item.item_id, 'id': self.id})
-            item.kill()
+            item.kill()zc
 
     def handle_death(self):
         super(MainPlayer, self).handle_death()

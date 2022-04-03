@@ -98,7 +98,7 @@ class Entity(MovingObject, ABC):
         dist = ((self.end_pos[0] - self.start_pos[0]) ** 2 + (self.end_pos[1] - self.start_pos[1]) ** 2) ** 0.5
         if dist == 0:
             return self.start_pos
-        norm_speed = 100 * self.get_speed() * 10 ** -9  # speed / 1 game tick = speed / (100 * 10 ** -9 nanosecs)
+        norm_speed = 100 * 1.85 * self.get_speed() * 10 ** -9  # speed / 1 game tick = speed / (100 * 10 ** -9 nanosecs)
         total_time = dist / norm_speed
         p = (t - self.t0) / total_time
         if p > 1:
@@ -320,12 +320,12 @@ class Server:
         elif cmd == 'use_item':
             item_type = player.items.pop(data['item_id'])
             data = {'cmd': cmd, 'item_type': item_type, 'id': data['id']}
-
         elif cmd == 'item_dropped':
             item_type = player.items.pop(data['item_id'])
             dropped = Dropped(item_type=item_type, item_id=data['item_id'], pos=random_drop_pos(player.get_pos(t)))
             self.dropped[dropped.item_id] = dropped
             data = {'cmd': cmd, 'item_type': dropped.item_type, 'item_id': dropped.item_id, 'pos': dropped.pos}
+
         elif cmd == 'item_picked':
             dropped = self.dropped[data['item_id']]
             if dist(dropped.pos, player.get_pos(t)) < 100 and len(player.items) < settings.INVENTORY_SIZE:
