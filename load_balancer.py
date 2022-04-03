@@ -1,8 +1,6 @@
-import logging
-from typing import Tuple, Collection
+from typing import Dict
 
-from my_server import Player, MyJSONEncoder
-from settings import *
+from my_server import Player, MyJSONEncoder, generate_id
 from utils import *
 
 
@@ -12,61 +10,41 @@ class LoadBalancer:
 
         self.servers = servers
         self.clients = {}  # id to client address
+        self.player_chunks: Dict[int, Tuple[int, int]] = {}  # id to chunk
 
-        self.chunks_x = MAP_SIZE[0] // CHUNK_SIZE
-        self.chunks_y = MAP_SIZE[1] // CHUNK_SIZE
-        self.chunk_mapping = None
-        self.generate_chunk_mapping()
-
-    def generate_chunk_mapping(self):
-        self.chunk_mapping = []
-        mid_x = self.chunks_x // 2
-        mid_y = self.chunks_y // 2
-        for i in range(self.chunks_x):
-            self.chunk_mapping.append([])
-            for j in range(self.chunks_y):
-                self.chunk_mapping[i].append(2 * (i <= mid_x) + (j <= mid_y))  # magic
-
-    def get_chunk(self, pos: Tuple[int, int]) -> Tuple[int, int]:
-        return pos[0] // CHUNK_SIZE, pos[1] // CHUNK_SIZE
+        self.chunk_mapping = generate_chunk_mapping()
 
     def get_server(self, chunk_idx: Tuple[int, int]):
         return self.servers[self.chunk_mapping[chunk_idx[0]][chunk_idx[1]]]
-
-    def get_adj_server_idx(self, chunk_idx: Tuple[int, int]) -> Collection:
-        i, j = chunk_idx
-        servers = set()
-        for di in [-1, 0, 1]:
-            for dj in [-1, 0, 1]:
-                if 0 <= i + di <= self.chunks_x and 0 <= j + dj < self.chunks_y:
-                    servers.add(self.chunk_mapping[i + di][j + dj])
-        return servers
 
     def send_cmd(self, cmd: str, params: dict, address):
         data = json.dumps({'cmd': cmd, **params}, cls=MyJSONEncoder).encode() + b'\n'
         self.socket.sendto(data, address)
 
     def connect(self, data, client):
+        items = {str(generate_id()): "speed_pot"}
         player = Player(id=None, start_pos=(1400, 1360), end_pos=None,
-                        health=100, items=[], t0=0, username=data['username'])
-        server = self.get_server(self.get_chunk(player.start_pos))
+                        health=100, items=items, t0=0, username=data['username'])
+        chunk = get_chunk(player.start_pos)
+        server = self.get_server(chunk)
         self.clients[player.id] = client
+        self.player_chunks[player.id] = chunk
         self.send_cmd('connect', {'player': player, 'client': client}, server)
         self.send_cmd('redirect', {'server': server}, client)
-        logging.debug(f'new client connected: {client=}, {player=}, {server=}')
+        logging.debug(f'new client connected: {client=}, {player=}, {server=}, {chunk=}')
 
     def forward_updates(self, data, address):
         updates_by_server_idx = [[] for _ in self.servers]
         for update_idx, chunk_idx in enumerate(data['chunks']):
-            for adj_server in self.get_adj_server_idx(chunk_idx):
-                if adj_server != address:
-                    updates_by_server_idx[adj_server].append(update_idx)
+            for adj_server_idx in get_adj_server_idx(chunk_mapping=self.chunk_mapping, chunk_idx=chunk_idx):
+                updates_by_server_idx[adj_server_idx].append(update_idx)
             # redirect clients
             update = data['updates'][update_idx]
             if update['cmd'] == 'move':
-                new_server = self.get_server(self.get_chunk(update['pos']))
+                new_server = self.get_server(get_chunk(update['pos']))
                 if new_server != address:
                     client = self.clients[update['id']]
+                    logging.debug(f'client changed server: {client=}, {address=}, {new_server=}')
                     self.send_cmd('redirect', {'server': new_server}, client)
                     self.send_cmd('add_client', {'client': client, 'id': update['id']}, new_server)
                     self.send_cmd('remove_client', {'client': client, 'id': update['id']}, address)
@@ -90,7 +68,7 @@ class LoadBalancer:
                     if address not in self.servers:
                         self.connect(data=data, client=address)
                 elif data['cmd'] == 'forward_updates':
-                    if address in self.servers or True:  # TODO: remove
+                    if address in self.servers:
                         self.forward_updates(data, address)
             except Exception:
                 logging.exception('exception while handling request')
@@ -101,8 +79,7 @@ def main():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind(LB_ADDRESS)
 
-    servers = [('127.0.0.1', p) for p in [11110, 11111, 11112, 11113]]
-    lb = LoadBalancer(servers=servers, sock=sock)
+    lb = LoadBalancer(servers=SERVER_ADDRESSES, sock=sock)
     # for row in lb.chunk_mapping:
     #     print(row)
 
