@@ -209,7 +209,7 @@ class MainPlayer(Player):
             else:
                 pos = self.rect.topright
             if send_update:
-                self.client.send_update('item_dropped', {'item_id': item.item_id, 'id': self.id})
+                self.client.send_update('item_dropped', {'item_id': item.item_id, 'id': self.id, 'pos': self.rect.center})
             item.kill()
 
     def pick_item(self, inv: 'Inventory', sprite_groups, send_update=True):

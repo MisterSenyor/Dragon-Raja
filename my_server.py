@@ -321,10 +321,11 @@ class Server:
             item_type = player.items.pop(data['item_id'])
             data = {'cmd': cmd, 'item_type': item_type, 'id': data['id']}
         elif cmd == 'item_dropped':
-            item_type = player.items.pop(data['item_id'])
-            dropped = Dropped(item_type=item_type, item_id=data['item_id'], pos=random_drop_pos(player.get_pos(t)))
-            self.dropped[dropped.item_id] = dropped
-            data = {'cmd': cmd, 'item_type': dropped.item_type, 'item_id': dropped.item_id, 'pos': dropped.pos}
+            if dist(data['pos'], player.get_pos(t)) < 250:
+                item_type = player.items.pop(data['item_id'])
+                dropped = Dropped(item_type=item_type, item_id=data['item_id'], pos=random_drop_pos(data['pos']))
+                self.dropped[dropped.item_id] = dropped
+                data = {'cmd': cmd, 'item_type': dropped.item_type, 'item_id': dropped.item_id, 'pos': dropped.pos}
 
         elif cmd == 'item_picked':
             dropped = self.dropped[data['item_id']]
