@@ -317,6 +317,10 @@ class Server:
             self.projectiles[proj.id] = proj
         elif cmd == 'attack':
             self.attacking_players.append(player.id)
+        elif cmd == 'use_item':
+            item_type = player.items.pop(data['item_id'])
+            data = {'cmd': cmd, 'item_type': item_type, 'id': data['id']}
+
         elif cmd == 'item_dropped':
             item_type = player.items.pop(data['item_id'])
             dropped = Dropped(item_type=item_type, item_id=data['item_id'], pos=random_drop_pos(player.get_pos(t)))

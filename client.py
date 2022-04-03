@@ -111,6 +111,10 @@ class Client:
         elif cmd == 'item_picked':
             dropped = self.get_dropped_by_id(update['item_id'])
             dropped.kill()
+        elif cmd == 'use_item':
+            entity = self.get_entity_by_id(update['id'])
+            item = entities.Item(item_type=update['item_type'], owner=entity)
+            item.use_item(send_update=False)
         elif cmd == 'entity_died':
             # entity = self.get_entity_by_id(update['id'])
             # entity.kill()
@@ -124,12 +128,8 @@ class Client:
             elif cmd == 'attack':
                 # check collision with mob_ids
                 entity.melee_attack(send_update=False)
-            elif cmd == 'use_item':
-                item = entities.Item(item_type=update['item_type'], owner=entity)
-                item.use_item(send_update=False)
             elif cmd == 'player_leaves':
                 entity.kill()
-
 
     def receive_updates(self):
         while True:
