@@ -116,9 +116,8 @@ class NewServer(Server):
         chunks = []
         for update, chunk in self.forwarded_updates:
             if update['id'] not in self.player_ids_in_shared:
+                assert chunk in self.shared_chunks
                 updates.append({'cmd': 'player_enters', 'player': self.players[update['id']]})
-                chunks.append(chunk)
-                updates.append(update)
                 chunks.append(chunk)
                 self.player_ids_in_shared.add(update['id'])
             elif chunk not in self.shared_chunks:
