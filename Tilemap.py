@@ -35,7 +35,16 @@ class TiledMap:
     def make_map(self):
         temp_surface = pg.Surface((self.width, self.height))
         self.render(temp_surface)
+        self.get_objects(apply_func=lambda x: x)
         return temp_surface
+    
+    def get_objects(self, apply_func=lambda x: pg.Rect(x[0], x[1])) -> list:
+        walls = []
+        for tile in self.tmxdata.objects:
+            if tile.name == 'w':
+                walls.append(apply_func(((tile.x, tile.y), (tile.width, tile.height))))
+        
+        return walls
 
 class Camera:
     def __init__(self, width, height):
