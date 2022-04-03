@@ -12,13 +12,13 @@ class NewClient(Client):
     def init(self, username='ariel'):
         self.send_cmd('connect', {'username': username}, self.lb_address)
         try:
-            data = recv_json(self.sock, self.lb_address)
-            assert data['cmd'] == 'redirect'
+            data, address = self.sock_wrapper.recv_from()
+            assert data['cmd'] == 'redirect', address == self.lb_address
             logging.debug(f'received redirect from lb: {data=}')
             self.server = tuple(data['server'])
 
-            data = recv_json(self.sock, self.server)
-            assert data['cmd'] == 'init'
+            data, address = self.sock_wrapper.recv_from()
+            assert data['cmd'] == 'init', address == self.server
             self.main_player = self.create_main_player(data['main_player'])
             for player_data in data['players']:
                 self.create_player(player_data)
@@ -33,7 +33,7 @@ class NewClient(Client):
 
     def receive_updates(self):
         while True:
-            data, address = recv_json(self.sock, None)
+            data, address = self.sock_wrapper.recv_from()
             try:
                 cmd = data['cmd']
                 if address == self.lb_address:

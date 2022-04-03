@@ -1,7 +1,8 @@
 import json
 import logging
 import socket
-from typing import Tuple, Collection
+from typing import Tuple, Collection, Any, Dict
+from collections import defaultdict
 
 from settings import *
 
@@ -16,26 +17,26 @@ def send_all(sock: socket.socket, data: bytes, address):
         logging.exception(f"can't send data: {address=}, {data=}")
 
 
-def recv_json(sock: socket.socket, address, max_iterations=10):
-    k = 0
-    data = b''
-    try:
+class JSONSocketWrapper:
+    def __init__(self, sock: socket.socket, max_iterations=10):
+        self.socket = sock
+        self.max_iterations = max_iterations
+        self.received: Dict[Any, list] = defaultdict(lambda: [0, b''])
+
+    def recv_from(self):
         while True:
-            msg, addr = sock.recvfrom(1024)
-            # assert addr == address  # wayyy more complex otherwise
-            data += msg
+            msg, addr = self.socket.recvfrom(1024)
+            self.received[addr][1] += msg
+            self.received[addr][0] += 1
             try:
-                json_data = json.loads(data)
+                json_data = json.loads(self.received[addr][1])
                 # logging.debug(f'received data: {k=}, {len(data)=}, {data=}')
-                if address is None:
-                    return json_data, addr
-                return json_data
+                del self.received[addr]
+                return json_data, addr
             except json.JSONDecodeError:
-                k += 1
-            if k == max_iterations:
-                raise ConnectionError(f'max iterations exceeded in recv_json')
-    except Exception:
-        logging.exception(f"can't receive json data, {max_iterations=}, {k=}, {data=}")
+                if self.received[0] == self.max_iterations:
+                    logging.warning(f'max iterations exceeded in recv_json')
+                    del self.received[addr]
 
 
 def dist(pos1, pos2):

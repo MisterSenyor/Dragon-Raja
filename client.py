@@ -23,6 +23,7 @@ class Client:
                  player_animations, player_anim_speed, mob_animations, mob_anim_speed, player_walk_speed,
                  mob_walk_speed):
         self.sock = sock
+        self.sock_wrapper = JSONSocketWrapper(self.sock)
         self.server = server
         self.sprite_groups = sprite_groups
 
@@ -70,7 +71,8 @@ class Client:
 
     def init(self, username='ariel'):
         self.send_update('connect', {'username': username})
-        data = recv_json(self.sock, self.server)
+        data, address = self.sock_wrapper.recv_from()
+        assert address == self.server
         logging.debug(f'init data received: {data=}')
         try:
             if data['cmd'] == 'init':
@@ -130,10 +132,10 @@ class Client:
             elif cmd == 'player_leaves':
                 entity.kill()
 
-
     def receive_updates(self):
         while True:
-            data = recv_json(self.sock, self.server)
+            data, address = self.sock_wrapper.recv_from()
+            assert address == self.server
             try:
                 cmd = data['cmd']
                 if cmd == 'update':
