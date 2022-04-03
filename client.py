@@ -13,8 +13,8 @@ def create_entity(cls, data, sprite_groups, walk_speed, animations, anim_speed, 
         anim_speed=anim_speed, id_=data['id'], **kwargs)
     entity.health = data['health']
     entity.move(*data['end_pos'], send_update=False)
-    for item in data['items']:
-        entity.Item(item_type=item['item_type'], owner=entity)
+    for item_id, item_type in data.pop('items', {}).items():
+        entities.Item(item_type=item_type, owner=entity, item_id=item_id)
     return entity
 
 
@@ -65,7 +65,8 @@ class Client:
                             send_update=False)
 
     def create_dropped(self, data):
-        entities.Dropped(item_type=data['item_type'], pos=data['pos'], sprite_groups=self.dropped_sprite_groups)
+        entities.Dropped(item_type=data['item_type'], pos=data['pos'], sprite_groups=self.dropped_sprite_groups,
+                         item_id=data['item_id'])
 
     def init(self, username='ariel'):
         self.send_update('connect', {'username': username})
@@ -80,6 +81,8 @@ class Client:
                     self.create_mob(mob_data)
                 for projectile_data in data['projectiles']:
                     self.create_projectile(projectile_data)
+                for dropped_data in data['dropped']:
+                    self.create_dropped(dropped_data)
         except Exception:
             logging.exception(f'exception in init')
 
@@ -87,6 +90,11 @@ class Client:
         entities = self.sprite_groups['entity'].sprites()
         ids = [entity.id for entity in entities]
         return entities[ids.index(id_)]
+
+    def get_dropped_by_id(self, id_: int):
+        dropped = self.sprite_groups['dropped'].sprites()
+        ids = [d.item_id for d in dropped]
+        return dropped[ids.index(id_)]
 
     def handle_update(self, update: dict):
         cmd = update['cmd']
@@ -99,8 +107,19 @@ class Client:
         elif cmd == 'collisions':
             pass
         elif cmd == 'item_dropped':
-            self.create_dropped(update['item'])
-
+            self.create_dropped(update)
+        elif cmd == 'item_picked':
+            dropped = self.get_dropped_by_id(update['item_id'])
+            dropped.kill()
+        elif cmd == 'use_item':
+            entity = self.get_entity_by_id(update['id'])
+            item = entities.Item(item_type=update['item_type'], owner=entity)
+            item.use_item(send_update=False)
+        elif cmd == 'entity_died':
+            # entity = self.get_entity_by_id(update['id'])
+            # entity.kill()
+            for drop_data in update['drops']:
+                self.create_dropped(drop_data)
         elif update['id'] != self.main_player.id:
             entity = self.get_entity_by_id(update['id'])
 
@@ -109,12 +128,8 @@ class Client:
             elif cmd == 'attack':
                 # check collision with mob_ids
                 entity.melee_attack(send_update=False)
-            elif cmd == 'use_item':
-                item = entities.Item(item_type=update['item_type'], owner=entity)
-                item.use_item(send_update=False)
             elif cmd == 'player_leaves':
                 entity.kill()
-
 
     def receive_updates(self):
         while True:

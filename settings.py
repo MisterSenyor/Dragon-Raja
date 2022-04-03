@@ -1,8 +1,3 @@
-import socket
-
-# IP = socket.gethostbyname(socket.gethostname())
-IP = '127.0.0.1'
-PORT = 13337
 
 SERVER_IP = '127.0.0.1'
 SERVER_PORT = 2222
@@ -34,7 +29,10 @@ CHUNK_SIZE = 100
 LB_ADDRESS = ('127.0.0.1', 13579)
 
 MAP_SIZE = (10000, 5000)  # change to real value
+PEACEFUL_MODE = False
 
 char_lim = 20  # chat text char lim
 
 username_lim = 20  # username character limit
+
+INVENTORY_SIZE = 15

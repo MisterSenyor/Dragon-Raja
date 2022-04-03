@@ -1,7 +1,7 @@
 import logging
 import random
 from typing import Iterable
-
+import sys
 import pygame as pg
 
 import client
@@ -123,7 +123,7 @@ class Entity(pg.sprite.Sprite):
 
     def handle_death(self):
         self.change_status('death')
-        self.remove(self.groups)
+        self.kill()
 
 
 class Player(Entity):
@@ -196,7 +196,7 @@ class MainPlayer(Player):
             self.client.send_update('use_skill',
                                     {'id': self.id, 'skill_id': skill_id})
 
-    def drop_item(self, inv, send_update=True):
+    def drop_item(self, inv, sprite_groups, send_update=True):
         """ DROPS ITEM FROM CURRENT SLOT ON THE GROUND"""
         item = inv.slots[inv.cur_slot]
         # CHECK IF CUR SLOT IS EMPTY:
@@ -209,7 +209,47 @@ class MainPlayer(Player):
             else:
                 pos = self.rect.topright
             if send_update:
-                self.client.send_update('item_dropped', {'id': self.id, 'item': {'item_type': item.item_type, 'pos': pos}})
+                self.client.send_update('item_dropped', {'item_id': item.item_id, 'id': self.id, 'pos': self.rect.center})
+            item.kill()
+
+    def pick_item(self, inv: 'Inventory', sprite_groups, send_update=True):
+        """" PICKS UP ITEM:
+        CHECKS IF INVENTORY IS FULL,
+        CHECKS COLLISION WITH DROPPED ITEMS,
+        REMOVES DROPPED ITEM FROM ITS GROUPS AND ADDS ITEM TO INVENTORY"""
+
+        # CHECK INV:
+        if inv.is_full():
+            print("INV FULL")
+            return
+
+        # GO OVER ALL DROPPED ITEMS:
+        for sprite in sprite_groups["dropped"]:
+            # CHECK COLLISION WITH PLAYER:
+            if pg.sprite.collide_rect(self, sprite):
+                # ADD ITEM TO INV AND PLAYER ITEMS:
+                item = Item(sprite.item_type, self, sprite.item_id)
+                inv.add_item(item)
+                self.items.add(item)
+                if send_update:
+                    self.client.send_update('item_picked', {'id': self.id, 'item_id': item.item_id})
+
+    def use_item(self, inv, sprite_groups, send_update=True):
+        """ USES ITEM FROM CURRENT SLOT"""
+        item = inv.slots[inv.cur_slot]
+        # CHECK IF CUR SLOT IS EMPTY:
+        if item != 0:
+            # REMOVE FROM INVENTORY
+            inv.remove_item(inv.cur_slot)
+            # CHECK IN WHICH DIRECTION TO DROP ITEM:
+            if send_update:
+                self.client.send_update('use_item', {'item_id': item.item_id, 'id': self.id})
+            item.kill()
+
+    def handle_death(self):
+        super(MainPlayer, self).handle_death()
+        pg.quit()
+        sys.exit()
 
 
 class Mob(Entity):
@@ -256,9 +296,10 @@ class Mob(Entity):
 class Item(pg.sprite.Sprite):
     """" ITEM CLASS, GETS ITEM TYPE, OWNER (ENTITY)"""
 
-    def __init__(self, item_type, owner):
+    def __init__(self, item_type, owner: Entity, item_id = 1):
         self.group = owner.items
         self.item_type = item_type
+        self.item_id = item_id
         self.owner = owner
         self.image = pg.image.load('graphics/items/' + item_type + ".png")
         self.rect = self.image.get_rect()
@@ -306,14 +347,14 @@ class Item(pg.sprite.Sprite):
 
 
 class Dropped(pg.sprite.Sprite):
-    def __init__(self, item_type: str, pos: tuple, sprite_groups, id: int = 1):
+    def __init__(self, item_type: str, pos: tuple, sprite_groups, item_id: int = 1):
         self.groups = sprite_groups
-        pg.sprite.Sprite.__init__(self, *self.groups)
-        self.id = id
+        self.item_id = item_id
         self.item_type = item_type
         self.image = pg.image.load('graphics/items/' + item_type + ".png")
         self.rect = self.image.get_rect()
         self.rect.topleft = pos
+        pg.sprite.Sprite.__init__(self, *self.groups)
 
     def update(self, *args):
         pass
@@ -325,7 +366,7 @@ class Dropped(pg.sprite.Sprite):
 class Inventory:
     def __init__(self, screen_size):
         self.slots = []
-        for i in range(0, 15):
+        for i in range(INVENTORY_SIZE):
             self.slots.append(0)
         self.image = pg.image.load("Graphics/Inventory.png")
         self.rect = self.image.get_rect()
@@ -340,7 +381,7 @@ class Inventory:
         screen.blit(self.image, self.rect)
 
         # DRAW SLOTS AND ITEMS:
-        for i in range(0, 15):
+        for i in range(INVENTORY_SIZE):
             text = self.font.render(str(i + 1), True, (0, 0, 0))
             screen.blit(text, (self.rect.midleft[0] + i * 40, self.rect.midleft[1]))  # NUM
 
@@ -356,14 +397,14 @@ class Inventory:
 
     def is_full(self):
         """ RETURNS TRUE IF INVENTORY IS FULL, IF NO SLOTS AVAILABLE RETURNS FALSE"""
-        for i in range(0, 15):
+        for i in range(INVENTORY_SIZE):
             if self.slots[i] == 0:
                 return False
         return True
 
     def add_item(self, item: Item, send_updates=False):
         """" ADD ITEM TO FIRST EMPTY SLOT"""
-        for i in range(0, 15):
+        for i in range(INVENTORY_SIZE):
             if self.slots[i] == 0:
                 self.slots[i] = item
                 return

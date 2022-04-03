@@ -115,30 +115,6 @@ def login_draw(screen, text):
     pg.display.update()
 
 
-def pick_item(player, inv: Inventory, sprite_groups):
-    """" PICKS UP ITEM:
-    CHECKS IF INVENTORY IS FULL,
-    CHECKS COLLISION WITH DROPPED ITEMS,
-    REMOVES DROPPED ITEM FROM ITS GROUPS AND ADDS ITEM TO INVENTORY"""
-
-    # CHECK INV:
-    if inv.is_full():
-        print("INV FULL")
-        return
-
-    # GO OVER ALL DROPPED ITEMS:
-    for sprite in sprite_groups["dropped"]:
-        # CHECK COLLISION WITH PLAYER:
-        if pg.sprite.collide_rect(player, sprite):
-            # ADD ITEM TO INV AND PLAYER ITEMS:
-            item = Item(sprite.item_type, player)
-            inv.add_item(item)
-            player.items.add(item)
-
-            # REMOVE DROPPED ITEM FROM SPRITE GROUPS:
-            sprite.remove(sprite_groups["all"], sprite_groups["dropped"])
-
-
 def update_dir(player: Entity, camera):
     """ UPDATES PLAYER DIRECTION ACCORDING TO
     MOUSE POS (0 = RIGHT, 1 = LEFT) """
@@ -169,21 +145,16 @@ def handle_keyboard(player: MainPlayer, inv, camera, key, chat, sprite_groups):
         update_dir(player, camera)
 
     elif key == 114:  # R KEY
-        item = inv.slots[inv.cur_slot]
-        # CHECK IF EMPTY SLOT
-        if item != 0:
-            # USE ITEM:
-            item.use_item()
-            inv.remove_item(inv.cur_slot)
+        player.use_item(inv, sprite_groups)
 
     elif key == 103:  # G KEY
         player.use_skill(1, sprite_groups, inv)
 
     elif key == 113:  # Q KEY
-        player.drop_item(inv)
+        player.drop_item(inv, sprite_groups)
 
-    elif key == 98:
-        pick_item(player, inv, sprite_groups)
+    elif key == 98: # B KEY
+        player.pick_item(inv, sprite_groups)
 
     elif key == 116:  # T KEY - CHAT
         chat.is_pressed = True
@@ -366,29 +337,28 @@ def run():
 
     # SETTING UP CLIENT:
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    port = PORT if len(sys.argv) == 1 else int(sys.argv[1])
-    sock.bind((IP, port))
     sock_client = client.Client(sock=sock, server=(SERVER_IP, SERVER_PORT), sprite_groups=sprite_groups,
                                 player_animations=player_anims, mob_animations=mob_anims[0], player_anim_speed=5,
                                 player_walk_speed=5, mob_anim_speed=15, mob_walk_speed=2)
     # SOCK:
     sock_client.init(username=username)
     sock_thread = threading.Thread(target=sock_client.receive_updates)
-    sock_thread.daemon = True
     sock_thread.start()
+
+    player = sock_client.main_player
+    for item in player.items:
+        inv.add_item(item)
 
     # CHAT:
     client_chat = chat_client(username)
     client_chat.start()
     chat = Chat(client_chat, username=username)
     chat_thread = threading.Thread(target=client_chat.receive, args=(chat,))
-    chat_thread.daemon = True
     chat_thread.start()
-    player = sock_client.main_player
 
-    speed_pot = Item("speed_pot", player)
-    inv.add_item(speed_pot)
-    player.items.add(speed_pot)
+    # speed_pot = Item("speed_pot", player)
+    # inv.add_item(speed_pot)
+    # player.items.add(speed_pot)
 
 
     while running:

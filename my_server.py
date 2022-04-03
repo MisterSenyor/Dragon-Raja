@@ -43,22 +43,19 @@ class MyJSONEncoder(json.JSONEncoder):
             data = o.__dict__.copy()
             del data['t0']
             data['start_pos'] = o.get_pos(t)
+            if isinstance(o, Player) and not isinstance(o, MainPlayer):
+                del data['items']
             return data
+        if isinstance(o, Dropped):
+            return o.__dict__.copy()
         return super(MyJSONEncoder, self).default(o)
 
 
 @dataclass
-class Item:
-    item_type: str
-    t0: int
-
-
-@dataclass
 class Dropped:
-    id: int
+    item_id: str
     item_type: str
     pos: Tuple[int, int]
-
 
 
 @dataclass
@@ -69,7 +66,7 @@ class MovingObject(ABC):
 
     def __post_init__(self):
         if self.id is None:
-            self.id = random.randint(0, 99999)
+            self.id = generate_id()
 
     @abstractmethod
     def get_pos(self, t: int = None):
@@ -84,7 +81,6 @@ class MovingObject(ABC):
 class Entity(MovingObject, ABC):
     end_pos: Optional[Tuple[int, int]]
     health: int
-    items: List[Item]
 
     def __post_init__(self):
         super(Entity, self).__post_init__()
@@ -102,7 +98,7 @@ class Entity(MovingObject, ABC):
         dist = ((self.end_pos[0] - self.start_pos[0]) ** 2 + (self.end_pos[1] - self.start_pos[1]) ** 2) ** 0.5
         if dist == 0:
             return self.start_pos
-        norm_speed = 100 * self.get_speed() * 10 ** -9  # speed / 1 game tick = speed / (100 * 10 ** -9 nanosecs)
+        norm_speed = 100 * 1.85 * self.get_speed() * 10 ** -9  # speed / 1 game tick = speed / (100 * 10 ** -9 nanosecs)
         total_time = dist / norm_speed
         p = (t - self.t0) / total_time
         if p > 1:
@@ -114,12 +110,18 @@ class Entity(MovingObject, ABC):
 @dataclass
 class Player(Entity):
     username: str
+    items: Dict[str, str]  # ids are numbers converted to strings, e.g "123"
 
     def get_damage(self):
         return 20
 
     def get_speed(self):
         return 5
+
+
+# used for encoding items
+class MainPlayer(Player):
+    pass
 
 
 @dataclass
@@ -149,6 +151,20 @@ class Mob(Entity):
         return 2
 
 
+def generate_id(max_n=100000):
+    id_ = random.randint(1, max_n)
+    while id_ in generate_id.ids:
+        id_ = random.randint(1, max_n)
+    return id_
+
+
+generate_id.ids = set()
+
+
+def random_drop_pos(pos):
+    return pos[0] + random.randint(-50, 50), pos[1] + random.randint(-100, 100)
+
+
 class Server:
     def __init__(self, sock: socket.socket):
         self.socket = sock
@@ -157,6 +173,7 @@ class Server:
         self.players: Dict[int, Player] = {}
         self.mobs: Dict[int, Mob] = {}
         self.projectiles: Dict[int, Projectile] = {}
+        self.dropped: Dict[str, Dropped] = {}
         self.updates = []
         self.attacking_players: List[int] = []  # attacking players' ids
 
@@ -170,7 +187,7 @@ class Server:
                     start_pos=(random.randint(0, settings.MAP_SIZE[0] - 1),
                                random.randint(0, settings.MAP_SIZE[1] - 1)),
                     end_pos=None,
-                    health=100, t0=0, items=[])
+                    health=100, t0=0)
             self.mobs[m.id] = m
 
     def update_mobs(self):
@@ -181,7 +198,7 @@ class Server:
             m.move(t=t, pos=(pos[0] + random.randint(-500, 500), pos[1] + random.randint(-500, 500)))
             logging.debug(f'mob moved: {m=}')
             self.updates.append({'cmd': 'move', 'pos': m.end_pos, 'id': m.id})
-        if self.players:
+        if self.players and not settings.PEACEFUL_MODE:
             for _ in range(int(0.1 * len(self.mobs))):
                 m = random.choice(list(self.mobs.values()))
                 m_pos = m.get_pos(t)
@@ -195,8 +212,9 @@ class Server:
                     self.updates.append({'cmd': 'projectile', 'projectile': proj, 'id': m.id})
 
     def connect(self, data, address):
-        player = Player(id=None, start_pos=(1400, 1360), end_pos=None,
-                        health=100, items=[], t0=0, username=data['username'])
+        items = {str(generate_id()): "speed_pot"}
+        player = MainPlayer(id=None, start_pos=(1400, 1360), end_pos=None,
+                            health=100, items=items, t0=0, username=data['username'])
         self.updates.append({'cmd': 'player_enters', 'player': player})
 
         data = json.dumps({
@@ -204,7 +222,8 @@ class Server:
             'main_player': player,
             'players': list(self.players.values()),
             'mobs': list(self.mobs.values()),
-            'projectiles': list(self.projectiles.values())
+            'projectiles': list(self.projectiles.values()),
+            'dropped': list(self.dropped.values())
         }, cls=MyJSONEncoder).encode() + b'\n'
         send_all(self.socket, data, address)
 
@@ -223,11 +242,27 @@ class Server:
 
     def deal_damage(self, entity: Entity, damage: int):
         entity.health -= damage
-        if entity.health < 0:
+        if entity.health <= 0:
+            pos = entity.get_pos()
             if isinstance(entity, Player):
-                del self.players[entity.id]
+                if entity.id in self.players:
+                    del self.players[entity.id]
+                    drops = []
+                    for item_id, item_type in entity.items.items():
+                        drops.append(Dropped(
+                            item_id=item_id, item_type=item_type,
+                            pos=random_drop_pos(pos)))
             elif isinstance(entity, Mob):
-                del self.mobs[entity.id]
+                if entity.id in self.mobs:
+                    del self.mobs[entity.id]
+                drops = [Dropped(
+                    item_id=str(generate_id()),
+                    item_type=random.choice(['strength_pot', 'heal_pot', 'speed_pot', 'useless_card']),
+                    pos=random_drop_pos(pos))
+                    for _ in range(random.randint(2, 3))]
+            for drop in drops:
+                self.dropped[drop.item_id] = drop
+            self.updates.append({'cmd': 'entity_died', 'id': entity.id, 'drops': drops})
             logging.debug(f'entity died: {entity=}')
 
     def handle_collision(self, o1, o2) -> bool:
@@ -282,8 +317,24 @@ class Server:
             self.projectiles[proj.id] = proj
         elif cmd == 'attack':
             self.attacking_players.append(player.id)
+        elif cmd == 'use_item':
+            item_type = player.items.pop(data['item_id'])
+            data = {'cmd': cmd, 'item_type': item_type, 'id': data['id']}
         elif cmd == 'item_dropped':
-            dropped = Dropped(random.randint(1, 65536), **data['item'])
+            if dist(data['pos'], player.get_pos(t)) < 250:
+                item_type = player.items.pop(data['item_id'])
+                dropped = Dropped(item_type=item_type, item_id=data['item_id'], pos=random_drop_pos(data['pos']))
+                self.dropped[dropped.item_id] = dropped
+                data = {'cmd': cmd, 'item_type': dropped.item_type, 'item_id': dropped.item_id, 'pos': dropped.pos}
+
+        elif cmd == 'item_picked':
+            dropped = self.dropped[data['item_id']]
+            if dist(dropped.pos, player.get_pos(t)) < 100 and len(player.items) < settings.INVENTORY_SIZE:
+                del self.dropped[data['item_id']]
+                player.items[dropped.item_id] = dropped.item_type
+                del data['id']
+            else:
+                raise Exception('bad client, cannot pickup item')
         self.updates.append(data)
 
     def receive_packets(self):
