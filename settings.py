@@ -48,3 +48,4 @@ INVENTORY_SIZE = 15
 PLAYER_SIZE = 50
 MOB_SIZE = 100
 PROJECTILE_SIZE = 30
+chat_start_seed = "Barak_Gonen"
