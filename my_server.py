@@ -2,6 +2,7 @@ import logging
 import random
 import threading
 import time
+from Tilemap import TiledMap
 from abc import ABC, abstractmethod
 from os import path
 from dataclasses import dataclass
@@ -303,12 +304,10 @@ class Server:
         kd_tree = KDTree(data)
         collisions = kd_tree.query_pairs(100)
         relevant_collisions = []
+        o1, o2 = None, None
         for col in collisions:
             if col[0] < len(moving_objs):
                 o1 = moving_objs[col[0]]
-            else:
-                o1 = 
-            
             if col[1] < len(moving_objs):
                 o2 = moving_objs[col[1]]
             if self.handle_collision(o1, o2):
