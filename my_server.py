@@ -2,6 +2,7 @@ import random
 import threading
 import time
 from abc import ABC, abstractmethod
+from os import path
 from dataclasses import dataclass
 from typing import Tuple, List, Dict, Optional
 
@@ -176,6 +177,8 @@ class Server:
         self.dropped: Dict[str, Dropped] = {}
         self.updates = []
         self.attacking_players: List[int] = []  # attacking players' ids
+        map_folder = 'maps'
+        self.map = TiledMap(path.join(map_folder, 'map_new.tmx'))
 
         self.generate_mobs(100)
 
@@ -295,11 +298,18 @@ class Server:
         if not moving_objs:
             return
         data = [o.get_pos(t) for o in moving_objs]
+        data = data + [wall[0] for wall in self.map.get_objects(apply_func=lambda x: x)]
         kd_tree = KDTree(data)
         collisions = kd_tree.query_pairs(100)
         relevant_collisions = []
         for col in collisions:
-            o1, o2 = moving_objs[col[0]], moving_objs[col[1]]
+            if col[0] < len(moving_objs):
+                o1 = moving_objs[col[0]]
+            else:
+                o1 = 
+            
+            if col[1] < len(moving_objs):
+                o2 = moving_objs[col[1]]
             if self.handle_collision(o1, o2):
                 relevant_collisions.append([o1.id, o2.id])
         self.attacking_players = []
