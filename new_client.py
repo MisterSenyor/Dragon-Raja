@@ -9,6 +9,32 @@ class NewClient(Client):
     def send_cmd(self, cmd: str, params: dict, dst):
         self.sock.sendto(json.dumps({'cmd': cmd, **params}).encode() + b'\n', dst)
 
+    def get_data(self, data):
+        try:
+            assert data['cmd'] == 'get_data'
+            # delete unnecessary sprites
+            ids = [o['id'] for o in data['players'] + data['mobs']] + [o['item_id'] for o in data['dropped']]
+            for sprite in self.sprite_groups['entity'].sprites():
+                if sprite.id not in ids:
+                    sprite.kill()
+            for sprite in self.sprite_groups['dropped'].sprites():
+                if sprite.item_id not in ids:
+                    sprite.kill()
+            # add new sprites
+            ids = [o.id for o in self.sprite_groups['entity'].sprites()] + \
+                  [o.item_id for o in self.sprite_groups['dropped'].sprites()]
+            for player_data in data['players']:
+                if player_data['id'] not in ids:
+                    self.create_player(player_data)
+            for mob_data in data['mobs']:
+                if mob_data['id'] not in ids:
+                    self.create_mob(mob_data)
+            for dropped_data in data['dropped']:
+                if dropped_data not in ids:
+                    self.create_dropped(dropped_data)
+        except Exception:
+            logging.exception(f'exception in get_data')
+
     def connect(self, username='ariel'):
         self.send_cmd('connect', {'username': username}, self.lb_address)
         try:
@@ -38,7 +64,12 @@ class NewClient(Client):
                         if updates:
                             logging.debug(f'received updates: {updates=}')
                         for update in updates:
-                            self.handle_update(update)
+                            try:
+                                self.handle_update(update)
+                            except Exception:
+                                logging.exception('exception in update')
+                    elif cmd == 'get_data':
+                        self.get_data(data)
                 else:
                     logging.warning(f'received json from an unknown source: {data=}, {address=}')
             except Exception:

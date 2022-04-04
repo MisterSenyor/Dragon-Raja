@@ -1,4 +1,5 @@
 import logging
+import math
 import random
 import threading
 import time
@@ -17,6 +18,7 @@ from server_chat import chat_server
 from utils import *
 
 pg.display.set_mode((40, 40))
+
 
 def check_collisions(direction: tuple, pos_before: tuple, pos_after: tuple, size: tuple, target_pos: tuple,
                      target_size: tuple) -> tuple:
@@ -184,8 +186,6 @@ class Server:
         map_folder = 'maps'
         self.map = TiledMap(path.join(map_folder, 'map_new.tmx'))
 
-        self.generate_mobs(100)
-
         logging.debug(f'server listening at: {self.socket.getsockname()}')
 
     def generate_mobs(self, count):
@@ -197,26 +197,29 @@ class Server:
                     health=100, t0=0)
             self.mobs[m.id] = m
 
+    def mob_move(self, mob: Mob):
+        pos = mob.get_pos()
+        mob.move(pos=(pos[0] + random.randint(-500, 500), pos[1] + random.randint(-500, 500)))
+        logging.debug(f'mob moved: {mob=}')
+        self.updates.append({'cmd': 'move', 'pos': mob.end_pos, 'id': mob.id})
+
+    def mob_attack(self, mob: Mob, player: Player):
+        player_pos, mob_pos = player.get_pos(), mob.get_pos()
+        target = player_pos[0] - mob_pos[0], player_pos[1] - mob_pos[1]
+        proj = Projectile(id=None, start_pos=mob_pos, target=target, type='axe', attacker_id=mob.id, t0=0)
+        self.projectiles[proj.id] = proj
+        logging.debug(f'mob shot projectile: {mob=}, {proj=}')
+        self.updates.append({'cmd': 'projectile', 'projectile': proj, 'id': mob.id})
+
     def update_mobs(self):
-        t = time.time_ns()
-        if random.random() < 0.01 * len(self.mobs):
-            m = random.choice(list(self.mobs.values()))
-            pos = m.get_pos(t)
-            m.move(t=t, pos=(pos[0] + random.randint(-500, 500), pos[1] + random.randint(-500, 500)))
-            logging.debug(f'mob moved: {m=}')
-            self.updates.append({'cmd': 'move', 'pos': m.end_pos, 'id': m.id})
+        for _ in range(math.ceil(0.01 * len(self.mobs))):
+            self.mob_move(random.choice(list(self.mobs.values())))
         if self.players and not settings.PEACEFUL_MODE:
-            for _ in range(int(0.1 * len(self.mobs))):
+            for _ in range(math.ceil(0.1 * len(self.mobs))):
                 m = random.choice(list(self.mobs.values()))
-                m_pos = m.get_pos(t)
                 player = random.choice(list(self.players.values()))
-                player_pos = player.get_pos(t)
-                if dist(player_pos, m_pos) < 500:
-                    target = player_pos[0] - m_pos[0], player_pos[1] - m_pos[1]
-                    proj = Projectile(id=None, t0=t, start_pos=m_pos, target=target, type='axe', attacker_id=m.id)
-                    self.projectiles[proj.id] = proj
-                    logging.debug(f'mob shot projectile: {m=}, {proj=}')
-                    self.updates.append({'cmd': 'projectile', 'projectile': proj, 'id': m.id})
+                if dist(player.get_pos(), m.get_pos()) < 500:
+                    self.mob_attack(mob=m, player=player)
 
     def connect(self, data, address):
         items = {str(generate_id()): "speed_pot"}
@@ -293,13 +296,13 @@ class Server:
             if o2.id in self.attacking_players:
                 result = True
                 self.deal_damage(o1, o2.get_damage())
-        
+
         if not isinstance(o1, Entity):
             result = self.handle_collision(o2, o1)
         t = time.time_ns()
         curr_pos = entity.get_pos(t)
         game_tick = (10 ** 9) / FPS  # in ns
-        next_pos = entity.get_pos(t + game_tick) 
+        next_pos = entity.get_pos(t + game_tick)
         collision_pos = check_collisions(direction, curr_pos, next_pos, o1.size)
         return result
 
@@ -392,6 +395,7 @@ def main():
     sock.bind(settings.SERVER_ADDRESS)
 
     server = Server(sock=sock)
+    server.generate_mobs(20)
     receive_thread = threading.Thread(target=server.receive_packets)
     receive_thread.start()
     # INITIALIZE CHAT SERVER:
@@ -401,7 +405,7 @@ def main():
     while True:
         time.sleep(settings.UPDATE_TICK)
         server.update_mobs()
-        server.collisions_handler()
+        # server.collisions_handler()
         server.send_updates()
 
 
