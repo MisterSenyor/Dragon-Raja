@@ -18,6 +18,12 @@ def create_entity(cls, data, sprite_groups, walk_speed, animations, anim_speed, 
     return entity
 
 
+def get_by_id(group, id_):
+    sprites = group.sprites()
+    ids = [sprite.id for sprite in sprites]
+    return sprites[ids.index(id_)]
+
+
 class Client:
     def __init__(self, sock: socket.socket, server: Address, sprite_groups: Dict[str, pygame.sprite.Group],
                  player_animations, player_anim_speed, mob_animations, mob_anim_speed, player_walk_speed,
@@ -46,14 +52,20 @@ class Client:
         self.sock.sendto(json.dumps({'cmd': cmd, **params}).encode() + b'\n', self.server)
 
     def create_main_player(self, data):
-        return create_entity(cls=entities.MainPlayer, data=data, sprite_groups=self.player_sprite_groups,
-                             walk_speed=self.player_walk_speed, sock_client=self,
-                             animations=self.player_animations, anim_speed=self.player_anim_speed)
+        return self.create_player(data, cls=entities.MainPlayer, sock_client=self)
 
-    def create_player(self, data):
-        return create_entity(cls=entities.Player, data=data, sprite_groups=self.player_sprite_groups,
-                             walk_speed=self.player_walk_speed, animations=self.player_animations,
-                             anim_speed=self.player_anim_speed)
+    def create_player(self, data, cls=entities.Player, **kwargs):
+        entity = create_entity(cls=cls, data=data, sprite_groups=self.player_sprite_groups,
+                               walk_speed=self.player_walk_speed, animations=self.player_animations,
+                               anim_speed=self.player_anim_speed, **kwargs)
+        if ENABLE_SHADOWS:
+            shadow = create_entity(cls=entities.Player, data=data, sprite_groups=self.player_sprite_groups,
+                                   walk_speed=self.player_walk_speed, animations=self.player_animations,
+                                   anim_speed=self.player_anim_speed)
+            shadow.id += 1
+            shadow.kill()
+            shadow.add(self.sprite_groups['all'], self.sprite_groups['shadows'])
+        return entity
 
     def create_mob(self, data):
         return create_entity(cls=entities.Entity, data=data, sprite_groups=self.entity_sprite_groups,
@@ -69,34 +81,33 @@ class Client:
         entities.Dropped(item_type=data['item_type'], pos=data['pos'], sprite_groups=self.dropped_sprite_groups,
                          item_id=data['item_id'])
 
-    def init(self, username='ariel'):
+    def connect(self, username='ariel'):
         self.send_update('connect', {'username': username})
         data, address = self.sock_wrapper.recv_from()
         assert address == self.server
         logging.debug(f'init data received: {data=}')
+        self.init(data)
+
+    def init(self, data):
         try:
-            if data['cmd'] == 'init':
-                self.main_player = self.create_main_player(data['main_player'])
-                for player_data in data['players']:
-                    self.create_player(player_data)
-                for mob_data in data['mobs']:
-                    self.create_mob(mob_data)
-                for projectile_data in data['projectiles']:
-                    self.create_projectile(projectile_data)
-                for dropped_data in data['dropped']:
-                    self.create_dropped(dropped_data)
+            assert data['cmd'] == 'init'
+            self.main_player = self.create_main_player(data['main_player'])
+            for player_data in data['players']:
+                self.create_player(player_data)
+            for mob_data in data['mobs']:
+                self.create_mob(mob_data)
+            for projectile_data in data['projectiles']:
+                self.create_projectile(projectile_data)
+            for dropped_data in data['dropped']:
+                self.create_dropped(dropped_data)
         except Exception:
             logging.exception(f'exception in init')
 
     def get_entity_by_id(self, id_: int):
-        entities = self.sprite_groups['entity'].sprites()
-        ids = [entity.id for entity in entities]
-        return entities[ids.index(id_)]
+        return get_by_id(self.sprite_groups['entity'], id_)
 
     def get_dropped_by_id(self, id_: int):
-        dropped = self.sprite_groups['dropped'].sprites()
-        ids = [d.item_id for d in dropped]
-        return dropped[ids.index(id_)]
+        return get_by_id(self.sprite_groups['dropped'], id_)
 
     def handle_update(self, update: dict):
         cmd = update['cmd']
@@ -122,6 +133,10 @@ class Client:
             # entity.kill()
             for drop_data in update['drops']:
                 self.create_dropped(drop_data)
+        elif ENABLE_SHADOWS and cmd == 'shadows':
+            for player in update['players']:
+                shadow = get_by_id(self.sprite_groups['shadows'], player['id'] + 1)
+                shadow.rect.center = player['pos']
         elif update['id'] != self.main_player.id:
             entity = self.get_entity_by_id(update['id'])
 

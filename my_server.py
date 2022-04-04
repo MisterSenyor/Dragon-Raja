@@ -1,3 +1,4 @@
+import logging
 import random
 import threading
 import time
@@ -98,7 +99,7 @@ class Entity(MovingObject, ABC):
         dist = ((self.end_pos[0] - self.start_pos[0]) ** 2 + (self.end_pos[1] - self.start_pos[1]) ** 2) ** 0.5
         if dist == 0:
             return self.start_pos
-        norm_speed = 100 * 1.85 * self.get_speed() * 10 ** -9  # speed / 1 game tick = speed / (100 * 10 ** -9 nanosecs)
+        norm_speed = self.get_speed() * (10 ** -9) * FPS  # speed / 1 game tick = speed / (100 * 10 ** -9 nanosecs)
         total_time = dist / norm_speed
         p = (t - self.t0) / total_time
         if p > 1:
@@ -355,6 +356,11 @@ class Server:
                 logging.exception('exception while handling request')
 
     def send_updates(self):
+        if settings.ENABLE_SHADOWS:
+            self.updates.append({
+                'cmd': 'shadows',
+                'players': [{'id': player.id, 'pos': player.get_pos()} for player in self.players.values()]
+            })
         data = json.dumps({'cmd': 'update', 'updates': self.updates}, cls=MyJSONEncoder).encode() + b'\n'
         self.updates.clear()
         for client in self.clients:

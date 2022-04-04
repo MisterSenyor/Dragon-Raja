@@ -225,7 +225,6 @@ def events(player, inv, camera, chat, sprite_groups):
 def update(all_sprites, player, camera, map_rect, sprite_groups):
     for sprite in sprite_groups['all']:
         sprite.update(map_rect, sprite_groups)
-        sprite.update(map_rect, sprite_groups)
 
     camera.update(player)
 
@@ -297,6 +296,8 @@ def run():
         "projectiles": projectile_sprites,
         "dropped": dropped_sprites
     }
+    if ENABLE_SHADOWS:
+        sprite_groups['shadows'] = pg.sprite.Group()
 
     player_anims = {
         'idle': AnimatedSprite('graphics/Knight/KnightIdle_strip.png', 15, True),
@@ -350,7 +351,7 @@ def run():
                                     player_anim_speed=5, player_walk_speed=5, mob_anim_speed=15,
                                     mob_walk_speed=2)
     # SOCK:
-    sock_client.init(username=username)
+    sock_client.connect(username=username)
     sock_thread = threading.Thread(target=sock_client.receive_updates)
     sock_thread.start()
 
@@ -360,10 +361,10 @@ def run():
 
     # CHAT:
     client_chat = chat_client(username)
-    client_chat.start()
+    # client_chat.start()
     chat = Chat(client_chat, username=username)
     chat_thread = threading.Thread(target=client_chat.receive, args=(chat,))
-    chat_thread.start()
+    # chat_thread.start()
 
     # speed_pot = Item("speed_pot", player)
     # inv.add_item(speed_pot)
