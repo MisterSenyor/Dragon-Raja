@@ -15,28 +15,58 @@ class NewServer(Server):
         self.shared_chunks = shared_chunks
         self.private_chunks = [chunk for chunk in self.server_chunks if chunk not in self.shared_chunks]
 
-        self.mobs = {}
+        logging.debug(f'{self.private_chunks=}')
+
         self.forwarded_updates = []
+
+    def generate_mobs(self, count):
+        for _ in range(count):
+            chunk = random.choice(self.private_chunks)
+            pos_x = chunk[0] * CHUNK_SIZE + random.randint(0, CHUNK_SIZE - 1)
+            pos_y = chunk[1] * CHUNK_SIZE + random.randint(0, CHUNK_SIZE - 1)
+            m = Mob(id=None,
+                    start_pos=(pos_x, pos_y),
+                    end_pos=None,
+                    health=100, t0=0)
+            self.mobs[m.id] = m
+
+    def mob_move(self, mob: Mob):
+        pos = mob.get_pos()
+        new_pos = pos[0] + random.randint(-500, 500), pos[1] + random.randint(-500, 500)
+        while get_chunk(new_pos) not in self.private_chunks:
+            new_pos = pos[0] + random.randint(-500, 500), pos[1] + random.randint(-500, 500)
+        mob.move(pos=new_pos)
+        logging.debug(f'mob moved: {mob=}')
+        self.updates.append({'cmd': 'move', 'pos': mob.end_pos, 'id': mob.id})
+
+    def add_client(self, player, client, init):
+        client = tuple(client)
+        if init:
+            data = {
+                'cmd': 'init',
+                'main_player': player,
+                'players': list(self.players.values()),
+                'mobs': list(self.mobs.values()),
+                'projectiles': list(self.projectiles.values()),
+                'dropped': list(self.dropped.values())
+            }
+        else:
+            data = {
+                'cmd': 'get_data',
+                'players': list(self.players.values()),
+                'mobs': list(self.mobs.values()),
+                'dropped': list(self.dropped.values())
+            }
+        state = json.dumps(data, cls=MyJSONEncoder).encode() + b'\n'
+        send_all(self.socket, state, client)
+        self.clients.append(client)
+        logging.debug(f'new client connected: {client=}, {player=}')
 
     def connect(self, data, address):
         player = Player(**data['player'], t0=time.time_ns(), items={})
         self.updates.append({'cmd': 'player_enters', 'player': player})
-
-        state = json.dumps({
-            'cmd': 'init',
-            'main_player': player,
-            'players': list(self.players.values()),
-            'mobs': list(self.mobs.values()),
-            'projectiles': list(self.projectiles.values()),
-            'dropped': list(self.dropped.values())
-        }, cls=MyJSONEncoder).encode() + b'\n'
-        client = tuple(data['client'])
-        send_all(self.socket, state, client)
-
-        self.clients.append(client)
+        self.add_client(player, data['client'], init=True)
         self.players[player.id] = player
-
-        logging.debug(f'new client connected: {client=}, {player=}')
 
     def add_player(self, data):
         if data['player']['id'] not in self.players:
@@ -56,6 +86,20 @@ class NewServer(Server):
         else:
             super(NewServer, self).handle_update(data=data, address=address)
 
+    def handle_lb_update(self, data, address):
+        cmd = data['cmd']
+        if cmd == "connect":
+            self.connect(data=data, address=address)
+        elif cmd == 'add_client':
+            self.add_client(self.players[data['id']], data['client'], init=False)
+        elif cmd == 'remove_client':
+            if tuple(data['client']) in self.clients:
+                self.clients.remove(tuple(data['client']))
+        elif cmd == 'update':
+            # send updates to clients
+            for update in data['updates']:
+                self.handle_update(data=update, address=address)
+
     def receive_packets(self):
         while True:
             try:
@@ -63,19 +107,8 @@ class NewServer(Server):
                 data = json.loads(msg.decode())
                 logging.debug(f'received data: {data=}, {address=}')
 
-                cmd = data['cmd']
                 if address == self.lb_address:
-                    if cmd == "connect":
-                        self.connect(data=data, address=address)
-                    elif cmd == 'add_client':
-                        self.clients.append(tuple(data['client']))
-                    elif cmd == 'remove_client':
-                        if tuple(data['client']) in self.clients:
-                            self.clients.remove(tuple(data['client']))
-                    elif cmd == 'update':
-                        # send updates to clients
-                        for update in data['updates']:
-                            self.handle_update(data=update, address=address)
+                    self.handle_lb_update(data=data, address=address)
                 elif address in self.clients:
                     # forward update to lb
                     self.handle_client_update(data=data, address=address)
@@ -147,6 +180,7 @@ def main():
     logging.debug(f'{len(shared_chunks)=}, {len(server_chunks)=}')
 
     server = NewServer(sock=sock, lb_address=LB_ADDRESS, shared_chunks=shared_chunks, server_chunks=server_chunks)
+    server.generate_mobs(20)
     receive_thread = threading.Thread(target=server.receive_packets)
     receive_thread.start()
 
@@ -154,6 +188,7 @@ def main():
         time.sleep(settings.UPDATE_TICK)
         # server.collisions_handler()
         server.send_updates()
+        server.update_mobs()
         server.forward_updates()
 
 
