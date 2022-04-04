@@ -2,6 +2,7 @@ import logging
 import random
 import threading
 import time
+import pygame as pg
 from Tilemap import TiledMap
 from abc import ABC, abstractmethod
 from os import path
@@ -15,6 +16,7 @@ import settings
 from server_chat import chat_server
 from utils import *
 
+pg.display.set_mode((40, 40))
 
 def check_collisions(direction: tuple, pos_before: tuple, pos_after: tuple, size: tuple, target_pos: tuple,
                      target_size: tuple) -> tuple:
@@ -291,6 +293,14 @@ class Server:
             if o2.id in self.attacking_players:
                 result = True
                 self.deal_damage(o1, o2.get_damage())
+        
+        if not isinstance(o1, Entity):
+            result = self.handle_collision(o2, o1)
+        t = time.time_ns()
+        curr_pos = entity.get_pos(t)
+        game_tick = (10 ** 9) / FPS  # in ns
+        next_pos = entity.get_pos(t + game_tick) 
+        collision_pos = check_collisions(direction, curr_pos, next_pos, o1.size)
         return result
 
     def collisions_handler(self):
