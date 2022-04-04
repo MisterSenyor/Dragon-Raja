@@ -1,3 +1,4 @@
+import logging
 import sys
 
 from my_server import *
@@ -9,9 +10,11 @@ class NewServer(Server):
                  shared_chunks: List[Tuple[int, int]]):
         super(NewServer, self).__init__(sock=sock)
         self.lb_address = lb_address
+
         self.server_chunks = server_chunks
         self.shared_chunks = shared_chunks
-        self.player_ids_in_shared = set()
+        self.private_chunks = [chunk for chunk in self.server_chunks if chunk not in self.shared_chunks]
+
         self.mobs = {}
         self.forwarded_updates = []
 
@@ -32,8 +35,6 @@ class NewServer(Server):
 
         self.clients.append(client)
         self.players[player.id] = player
-        if get_chunk(player.get_pos()) in self.shared_chunks:
-            self.player_ids_in_shared.add(player.id)
 
         logging.debug(f'new client connected: {client=}, {player=}')
 
@@ -41,31 +42,19 @@ class NewServer(Server):
         if data['player']['id'] not in self.players:
             player = Player(**data['player'], t0=time.time_ns(), items={})
             self.players[player.id] = player
-            if get_chunk(player.get_pos()) in self.shared_chunks:
-                self.player_ids_in_shared.add(player.id)
 
     def remove_player(self, data):
-        player = self.players.pop(data['id'])
-        self.player_ids_in_shared.discard(player.id)
+        if data['id'] in self.players:
+            del self.players[data['id']]
 
     def handle_update(self, data, address):
         cmd = data['cmd']
         if cmd == 'player_enters':
-            if data['player']['id'] in self.players:
-                return
             self.add_player(data)
         elif cmd == 'player_leaves':
-            if data['id'] not in self.players or get_chunk(self.players[data['id']].get_pos()) in self.server_chunks:
-                return
             self.remove_player(data)
         else:
             super(NewServer, self).handle_update(data=data, address=address)
-            return
-        self.updates.append(data)
-
-    def disconnect(self, data, address):
-        super(NewServer, self).disconnect(data, address)
-        self.player_ids_in_shared.discard(data['id'])
 
     def receive_packets(self):
         while True:
@@ -96,40 +85,38 @@ class NewServer(Server):
                 logging.exception('exception while handling request')
 
     def handle_client_update(self, data, address):
-        chunk = self.get_update_chunk(data=data, address=address)
-        logging.debug(f'{chunk=}, {data=}')
-        if chunk in self.server_chunks:
-            self.handle_update(data=data, address=address)
-        elif chunk in self.shared_chunks or data['id'] in self.player_ids_in_shared:
-            self.forwarded_updates.append((data, chunk))
-
-    def get_update_chunk(self, data, address):
         cmd = data['cmd']
         if cmd in ['move', 'attack', 'projectile', 'disconnect', 'item_dropped', 'item_picked']:
-            pos = self.players[data['id']].start_pos
-        return get_chunk(pos)
+            player = self.players[data['id']]
+        chunk = get_chunk(player.get_pos())
+        logging.debug(f'{chunk=}, {data=}')
+
+        # when cmd is move, send update whenever any one of start_pos, end_pos is in a shared chunk
+        if chunk in self.shared_chunks or (cmd == 'move' and get_chunk(data['pos']) in self.shared_chunks):
+            self.forwarded_updates.append((data, chunk))
+        else:
+            self.handle_update(data=data, address=address)
 
     def forward_updates(self):
         if self.forwarded_updates:
-            logging.debug(f'forwarding updates: {self.forwarded_updates=}, {self.player_ids_in_shared=}')
+            logging.debug(f'{self.forwarded_updates=}')
         updates = []
         chunks = []
+        moving_players = []
         for update, chunk in self.forwarded_updates:
-            if update['id'] not in self.player_ids_in_shared:
-                assert chunk in self.shared_chunks
-                updates.append({'cmd': 'player_enters', 'player': self.players[update['id']]})
-                chunks.append(chunk)
-                self.player_ids_in_shared.add(update['id'])
-            elif chunk not in self.shared_chunks:
-                updates.append({'cmd': 'player_leaves', 'id': update['id']})
-                chunks.append(chunk)
-                self.player_ids_in_shared.remove(update['id'])
-            if chunk in self.shared_chunks:
-                updates.append(update)
-                chunks.append(chunk)
+            # whenever a player changes its section, send its data
+            if update['cmd'] == 'move':
+                player = self.players[update['id']]
+                start_chunk, end_chunk = get_chunk(player.get_pos()), get_chunk(update['pos'])
+                if start_chunk != end_chunk:
+                    moving_players.append({
+                        'start_chunk': start_chunk, 'end_chunk': end_chunk, 'player': player
+                    })
+            updates.append(update)
+            chunks.append(chunk)
         if updates:
-            data = json.dumps({'cmd': 'forward_updates', 'updates': updates, 'chunks': chunks},
-                              cls=MyJSONEncoder).encode() + b'\n'
+            data = json.dumps({'cmd': 'forward_updates', 'updates': updates, 'chunks': chunks,
+                               'moving_players': moving_players}, cls=MyJSONEncoder).encode() + b'\n'
             send_all(self.socket, data, self.lb_address)
             logging.debug(f'updates sent to lb: {updates=}, {chunks=}')
         self.forwarded_updates.clear()
@@ -152,8 +139,7 @@ def main():
             if server_idx in adj and len(adj) > 1:
                 shared_chunks.append((i, j))
 
-    server_chunks = [(i, j) for i in range(CHUNKS_X) for j in range(CHUNKS_Y) if chunk_mapping[i][j] == server_idx and
-                     (i, j) not in shared_chunks]
+    server_chunks = [(i, j) for i in range(CHUNKS_X) for j in range(CHUNKS_Y) if chunk_mapping[i][j] == server_idx]
     logging.debug(f'{CHUNKS_X=}, {CHUNKS_Y=}, {server_idx=}')
     logging.debug(f'{server_chunks=}')
     logging.debug(f'{shared_chunks=}')

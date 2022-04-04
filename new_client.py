@@ -9,7 +9,7 @@ class NewClient(Client):
     def send_cmd(self, cmd: str, params: dict, dst):
         self.sock.sendto(json.dumps({'cmd': cmd, **params}).encode() + b'\n', dst)
 
-    def init(self, username='ariel'):
+    def connect(self, username='ariel'):
         self.send_cmd('connect', {'username': username}, self.lb_address)
         try:
             data, address = self.sock_wrapper.recv_from()
@@ -19,17 +19,9 @@ class NewClient(Client):
 
             data, address = self.sock_wrapper.recv_from()
             assert data['cmd'] == 'init', address == self.server
-            self.main_player = self.create_main_player(data['main_player'])
-            for player_data in data['players']:
-                self.create_player(player_data)
-            for mob_data in data['mobs']:
-                self.create_mob(mob_data)
-            for projectile_data in data['projectiles']:
-                self.create_projectile(projectile_data)
-            for dropped_data in data['dropped']:
-                self.create_dropped(dropped_data)
+            self.init(data)
         except Exception:
-            logging.exception(f'exception in init')
+            logging.exception(f'exception in connect')
 
     def receive_updates(self):
         while True:
