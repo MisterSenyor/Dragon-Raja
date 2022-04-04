@@ -14,6 +14,9 @@ DATABASE_ERRORS = dict(Connection_Error='Error connecting to database', No_Such_
                        Wrong_Password='Password does not match', Username_Exists='Username already taken',
                        Database_Error='Database malfunction', No_Such_Player='No player exists with this ID')
 
+USERS_FILE = r'data\Users.txt'
+PLAYERS_FILE = r'data\Players.txt'
+
 UPDATE_TICK = 0.1
 
 HEADER_SIZE = 1024
