@@ -167,7 +167,7 @@ class Player(Entity):
             else:
                 self.health = 100
         else:
-            self.effects.append(Effect(item_type, time.time_ns(), game_ticks_to_ns(1000)))
+            self.effects.append(Effect(type=item_type, t0=time.time_ns(), duration=game_ticks_to_ns(1000)))
 
     def check_effects(self):
         for effect in self.effects[:]:
