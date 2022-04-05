@@ -10,6 +10,7 @@ from settings import *
 def send_all(sock: socket.socket, data: bytes, address):
     try:
         k = 0
+        data = encrypt_packet(data)
         while k * 1024 < len(data):
             sock.sendto(data[1024 * k: 1024 * (k + 1)], address)
             k += 1
@@ -29,7 +30,7 @@ class JSONSocketWrapper:
             self.received[addr][1] += msg
             self.received[addr][0] += 1
             try:
-                json_data = json.loads(self.received[addr][1])
+                json_data = json.loads(decrypt_packet(self.received[addr][1]).decode())
                 # logging.debug(f'received data: {k=}, {len(data)=}, {data=}')
                 del self.received[addr]
                 return json_data, addr
@@ -73,3 +74,11 @@ def ascii_seed(seed):
     for char in seed:
         ascii_sum += ord(char)
     return ascii_sum
+
+
+def encrypt_packet(data):
+    return data
+
+
+def decrypt_packet(data):
+    return data

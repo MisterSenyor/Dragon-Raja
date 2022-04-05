@@ -15,6 +15,7 @@ from scipy.spatial import KDTree
 
 import settings
 # from server_chat import chat_server
+from server_chat import *
 from utils import *
 
 pg.display.set_mode((40, 40))
@@ -342,7 +343,7 @@ class Server:
 
         if not isinstance(o1, Entity):
             result = self.handle_collision(o2, o1)
-            
+
         if isinstance(o1, Player):
             size1 = PLAYER_SIZE
         elif isinstance(o1, Mob):
@@ -351,13 +352,13 @@ class Server:
             size2 = PLAYER_SIZE
         elif isinstance(o2, Mob):
             size2 = MOB_SIZE
-            
+
         t = time.time_ns()
         if isinstance(o1, Entity):
             curr_pos = o1.get_pos(t)
             game_tick = (10 ** 9) / FPS  # in ns
             next_pos = o1.get_pos(t + game_tick)
-            
+
             collision_pos = check_collisions(direction, curr_pos, next_pos, size1, o2[0], o2[1])
             if collision_pos != next_pos:
                 o1.end_pos = collision_pos
@@ -455,7 +456,7 @@ class Server:
         while True:
             try:
                 msg, address = self.socket.recvfrom(settings.HEADER_SIZE)
-                data = json.loads(msg.decode())
+                data = json.loads(decrypt_packet(msg).decode())
                 logging.debug(f'received data: {data=}')
 
                 if data["cmd"] == "connect":
@@ -490,8 +491,8 @@ def main():
     receive_thread = threading.Thread(target=server.receive_packets)
     receive_thread.start()
     # INITIALIZE CHAT SERVER:
-    # server_chat = chat_server()
-    # threading.Thread(target=server_chat.start).start()
+    server_chat = ChatServer()
+    threading.Thread(target=server_chat.start).start()
 
     while True:
         time.sleep(settings.UPDATE_TICK)
