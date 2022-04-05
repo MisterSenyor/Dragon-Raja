@@ -66,3 +66,10 @@ def get_adj_server_idx(chunk_mapping, chunk_idx: Tuple[int, int]) -> Collection:
             if 0 <= i + di < CHUNKS_X and 0 <= j + dj < CHUNKS_Y:
                 servers.add(chunk_mapping[i + di][j + dj])
     return servers
+
+
+def ascii_seed(seed):
+    ascii_sum = 0
+    for char in seed:
+        ascii_sum += ord(char)
+    return ascii_sum
