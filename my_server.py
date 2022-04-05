@@ -200,7 +200,7 @@ class Server:
     def mob_move(self, mob: Mob):
         pos = mob.get_pos()
         mob.move(pos=(pos[0] + random.randint(-500, 500), pos[1] + random.randint(-500, 500)))
-        logging.debug(f'mob moved: {mob=}')
+        # logging.debug(f'mob moved: {mob=}')
         self.updates.append({'cmd': 'move', 'pos': mob.end_pos, 'id': mob.id})
 
     def mob_attack(self, mob: Mob, player: Player):
@@ -208,7 +208,7 @@ class Server:
         target = player_pos[0] - mob_pos[0], player_pos[1] - mob_pos[1]
         proj = Projectile(id=None, start_pos=mob_pos, target=target, type='axe', attacker_id=mob.id, t0=0)
         self.projectiles[proj.id] = proj
-        logging.debug(f'mob shot projectile: {mob=}, {proj=}')
+        # logging.debug(f'mob shot projectile: {mob=}, {proj=}')
         self.updates.append({'cmd': 'projectile', 'projectile': proj, 'id': mob.id})
 
     def update_mobs(self):

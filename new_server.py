@@ -36,7 +36,7 @@ class NewServer(Server):
         while get_chunk(new_pos) not in self.private_chunks:
             new_pos = pos[0] + random.randint(-500, 500), pos[1] + random.randint(-500, 500)
         mob.move(pos=new_pos)
-        logging.debug(f'mob moved: {mob=}')
+        # logging.debug(f'mob moved: {mob=}')
         self.updates.append({'cmd': 'move', 'pos': mob.end_pos, 'id': mob.id})
 
     def add_client(self, player, client, init):
