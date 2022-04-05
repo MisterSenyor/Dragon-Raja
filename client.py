@@ -136,6 +136,10 @@ class Client:
             # entity.kill()
             for drop_data in update['drops']:
                 self.create_dropped(drop_data)
+        elif cmd == 'use_skill':
+            entity = self.get_entity_by_id(update['id'])
+            entity.use_skill(skill_id=update['skill_id'], sprite_groups=self.sprite_groups, inv=None,
+                             send_update=False)
         elif ENABLE_SHADOWS and cmd == 'shadows':
             for player in update['players']:
                 shadow = self.get_shadow_by_id(player['id'] + 1)

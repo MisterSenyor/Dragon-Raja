@@ -133,7 +133,7 @@ class Player(Entity):
     def update(self, map_rect, sprite_groups):
         Entity.update(self, map_rect, sprite_groups)
 
-    def use_skill(self, skill_id, sprite_groups, inv):
+    def use_skill(self, skill_id, sprite_groups, inv, send_update=True):
         """
         SKILL 1: CIRCLE OF AXES THROWN AROUND PLAYER
         SKILL 2: BUFFS: GETS TEMP STRENGTH, TEMP SPEED AND INSTANT HEAL
@@ -141,27 +141,26 @@ class Player(Entity):
 
         ONLY SENDS TYPE OF SKILL TO SERVER TO MINIMIZE PACKET TRAFFIC
         """
+        if not send_update:
+            # CHECK WHICH SKILL BY ID:
+            if skill_id == 1:
+                vect = pg.math.Vector2(0, 1)
+                for i in range(0, 9):
+                    # CIRCLE OF AXES:
 
-        # CHECK WHICH SKILL BY ID:
-        if skill_id == 1:
-            vect = pg.math.Vector2(0, 1)
-            for i in range(0, 9):
-                # CIRCLE OF AXES:
+                    axe = Projectile("axe", self, vect, [sprite_groups["all"], sprite_groups["projectiles"]],
+                                     send_update=False)
+                    vect = vect.rotate(45)
+            elif skill_id == 2:
+                # BUFFS USING (INSTANTLY USED) ITEMS:
 
-                axe = Projectile("axe", self, vect, [sprite_groups["all"], sprite_groups["projectiles"]],
-                                 send_update=False)
-                vect = vect.rotate(45)
-        elif skill_id == 2:
-            # BUFFS USING (INSTANTLY USED) ITEMS:
-
-            speed_pot = Item("speed_pot", self)
-            strength_pot = Item("strength_pot", self)
-            heal_pot = Item("heal_pot", self)
-            speed_pot.use_item(send_update=False)
-            strength_pot.use_item(send_update=False)
-            heal_pot.use_item(send_update=False)
-            heal_pot.use_item(send_update=False)
-        elif skill_id == 3:
+                speed_pot = Item("speed_pot", self)
+                strength_pot = Item("strength_pot", self)
+                heal_pot = Item("heal_pot", self)
+                speed_pot.use_item(send_update=False)
+                strength_pot.use_item(send_update=False)
+                heal_pot.use_item(send_update=False)
+        if send_update and skill_id == 3:
             # GET POTIONS IN INVENTORY:
 
             speed_pot = Item("speed_pot", self)
@@ -191,7 +190,7 @@ class MainPlayer(Player):
             self.client.send_update('attack', {'id': self.id})
 
     def use_skill(self, skill_id, sprite_groups, inv, send_update=True):
-        super(MainPlayer, self).use_skill(skill_id, sprite_groups, inv)
+        super(MainPlayer, self).use_skill(skill_id, sprite_groups, inv, send_update=send_update)
         if send_update:
             self.client.send_update('use_skill',
                                     {'id': self.id, 'skill_id': skill_id})
