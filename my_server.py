@@ -211,6 +211,8 @@ class Projectile(MovingObject):
 
 @dataclass
 class Mob(Entity):
+    type: str
+
     def get_speed(self):
         return 2
 
@@ -236,6 +238,7 @@ class Server:
 
         self.players: Dict[int, Player] = {}
         self.mobs: Dict[int, Mob] = {}
+
         self.projectiles: Dict[int, Projectile] = {}
         self.dropped: Dict[str, Dropped] = {}
         self.updates = []
@@ -251,22 +254,30 @@ class Server:
                     start_pos=(random.randint(0, settings.MAP_SIZE[0] - 1),
                                random.randint(0, settings.MAP_SIZE[1] - 1)),
                     end_pos=None,
-                    health=100, t0=0)
+                    health=100, t0=0, type=random.choice(['dragon', 'demon']))
             self.mobs[m.id] = m
 
     def mob_move(self, mob: Mob):
-        pos = mob.get_pos()
-        mob.move(pos=(pos[0] + random.randint(-500, 500), pos[1] + random.randint(-500, 500)))
-        # logging.debug(f'mob moved: {mob=}')
-        self.updates.append({'cmd': 'move', 'pos': mob.end_pos, 'id': mob.id})
+        if mob.type == 'dragon':
+            pos = mob.get_pos()
+            mob.move(pos=(pos[0] + random.randint(-500, 500), pos[1] + random.randint(-500, 500)))
+            self.updates.append({'cmd': 'move', 'pos': mob.end_pos, 'id': mob.id})
+        elif mob.type == 'demon':
+            player = self.players[random.choice(self.players)]
+            player_pos = player.get_pos()
+            if dist(player_pos, mob.get_pos()) < 100:
+                mob.move(pos=player_pos)
+                self.updates.append({'cmd': 'move', 'pos': player_pos, 'id': mob.id})
 
     def mob_attack(self, mob: Mob, player: Player):
-        player_pos, mob_pos = player.get_pos(), mob.get_pos()
-        target = player_pos[0] - mob_pos[0], player_pos[1] - mob_pos[1]
-        proj = Projectile(id=None, start_pos=mob_pos, target=target, type='axe', attacker_id=mob.id, t0=0)
-        self.projectiles[proj.id] = proj
-        # logging.debug(f'mob shot projectile: {mob=}, {proj=}')
-        self.updates.append({'cmd': 'projectile', 'projectile': proj, 'id': mob.id})
+        if mob.type == 'dragon':
+            player_pos, mob_pos = player.get_pos(), mob.get_pos()
+            target = player_pos[0] - mob_pos[0], player_pos[1] - mob_pos[1]
+            proj = Projectile(id=None, start_pos=mob_pos, target=target, type='axe', attacker_id=mob.id, t0=0)
+            self.projectiles[proj.id] = proj
+            self.updates.append({'cmd': 'projectile', 'projectile': proj, 'id': mob.id})
+        elif mob.type == 'demon':
+            self.updates.append({'cmd': 'attack', 'id': mob.id})
 
     def update_mobs(self):
         for _ in range(math.ceil(0.01 * len(self.mobs))):

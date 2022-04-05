@@ -64,7 +64,7 @@ class Client:
     def create_mob(self, data):
         return create_entity(cls=entities.Entity, data=data, sprite_groups=self.entity_sprite_groups,
                              walk_speed=self.mob_walk_speed, anim_speed=self.mob_anim_speed,
-                             animations=self.mob_animations)
+                             animations=self.mob_animations[data['type']])
 
     def create_projectile(self, data):
         entities.Projectile(proj_type=data['type'], attacker=self.get_entity_by_id(data['attacker_id']),

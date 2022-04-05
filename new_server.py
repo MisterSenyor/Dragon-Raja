@@ -1,4 +1,5 @@
 import logging
+import random
 import sys
 
 from my_server import *
@@ -27,17 +28,23 @@ class NewServer(Server):
             m = Mob(id=None,
                     start_pos=(pos_x, pos_y),
                     end_pos=None,
-                    health=100, t0=0)
+                    health=100, t0=0, type=random.choice(['dragon', 'demon']))
             self.mobs[m.id] = m
 
     def mob_move(self, mob: Mob):
-        pos = mob.get_pos()
-        new_pos = pos[0] + random.randint(-500, 500), pos[1] + random.randint(-500, 500)
-        while get_chunk(new_pos) not in self.private_chunks:
+        if mob.type == 'dragon':
+            pos = mob.get_pos()
             new_pos = pos[0] + random.randint(-500, 500), pos[1] + random.randint(-500, 500)
-        mob.move(pos=new_pos)
-        # logging.debug(f'mob moved: {mob=}')
-        self.updates.append({'cmd': 'move', 'pos': mob.end_pos, 'id': mob.id})
+            while get_chunk(new_pos) not in self.private_chunks:
+                new_pos = pos[0] + random.randint(-500, 500), pos[1] + random.randint(-500, 500)
+            mob.move(pos=new_pos)
+            self.updates.append({'cmd': 'move', 'pos': mob.end_pos, 'id': mob.id})
+        elif mob.type == 'demon' and self.players:
+            player = random.choice(list(self.players.values()))
+            player_pos = player.get_pos()
+            if get_chunk(mob.get_pos()) in self.private_chunks:
+                mob.move(pos=player_pos)
+                self.updates.append({'cmd': 'move', 'pos': player_pos, 'id': mob.id})
 
     def add_client(self, player, client, init):
         client = tuple(client)

@@ -315,13 +315,19 @@ def run():
         'death': AnimatedSprite('graphics/Knight/KnightDeath_strip.png', 15, True),
         'attack': AnimatedSprite('graphics/Knight/KnightAttack_strip.png', 22, True)
     }
-    mob_anims = [
-        {
+    mob_anims = {
+        'dragon': {
             'idle': AnimatedSprite('graphics/small_dragon/Idle', 3, False),
             'run': AnimatedSprite('graphics/small_dragon/Walk', 4, False),
             'death': AnimatedSprite('graphics/Knight/KnightDeath_strip.png', 15, True)
+        },
+        'demon': {
+            'idle': AnimatedSprite('graphics/demon/Idle', 3, False),
+            'run': AnimatedSprite('graphics/demon/Walk', 6, False),
+            'death': AnimatedSprite('graphics/demon/Death', 6, False),
+            'attack': AnimatedSprite('graphics/demon/Attack', 4, False),
         }
-    ]
+    }
 
     # SETTING UP MAP
 
@@ -352,12 +358,12 @@ def run():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     if MULTIPLE_SERVERS:
         sock_client = new_client.NewClient(sock=sock, server=(SERVER_IP, SERVER_PORT), sprite_groups=sprite_groups,
-                                           player_animations=player_anims, mob_animations=mob_anims[0],
+                                           player_animations=player_anims, mob_animations=mob_anims,
                                            player_anim_speed=5, player_walk_speed=5, mob_anim_speed=15,
                                            mob_walk_speed=2, lb_address=LB_ADDRESS)
     else:
         sock_client = client.Client(sock=sock, server=(SERVER_IP, SERVER_PORT), sprite_groups=sprite_groups,
-                                    player_animations=player_anims, mob_animations=mob_anims[0],
+                                    player_animations=player_anims, mob_animations=mob_anims,
                                     player_anim_speed=5, player_walk_speed=5, mob_anim_speed=15,
                                     mob_walk_speed=2)
     # SOCK:
