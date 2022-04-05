@@ -43,7 +43,7 @@ class Client:
         self.dropped_sprite_groups = [self.sprite_groups['all'], self.sprite_groups['dropped']]
 
     def send_update(self, cmd: str, params: dict):
-        self.sock.sendto(json.dumps({'cmd': cmd, **params}).encode() + b'\n', self.server)
+        self.sock.sendto(decrypt_packet(json.dumps({'cmd': cmd, **params}).encode() + b'\n'), self.server)
 
     def create_main_player(self, data):
         return self.create_player(data, cls=entities.MainPlayer, sock_client=self)

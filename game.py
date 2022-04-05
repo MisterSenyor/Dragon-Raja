@@ -9,7 +9,8 @@ import new_client
 from Tilemap import *
 from animated_sprite import *
 from entities import *
-# from client_chat import chat_client
+
+from client_chat import *
 
 pg.init()
 
@@ -165,11 +166,11 @@ def handle_keyboard(player: MainPlayer, inv, camera, key, chat, sprite_groups):
     elif key == 113:  # Q KEY
         player.drop_item(inv, sprite_groups)
 
-    elif key == 98: # B KEY
+    elif key == 98:  # B KEY
         player.pick_item(inv, sprite_groups)
 
-    # elif key == 116:  # T KEY - CHAT
-    #     chat.is_pressed = True
+    elif key == 116:  # T KEY - CHAT
+        chat.is_pressed = True
 
 
 def handle_chat(chat, key):
@@ -221,10 +222,10 @@ def events(player, inv, camera, chat, sprite_groups):
     for event in all_events:
         if event.type == pg.QUIT:
             return False
-        # if chat.is_pressed:
-        #     if event.type == pg.KEYDOWN:
-        #         handle_chat(chat, event.key)
-        #     return True
+        if chat.is_pressed:
+            if event.type == pg.KEYDOWN:
+                handle_chat(chat, event.key)
+            return True
         if event.type == pg.KEYDOWN:
             handle_keyboard(player, inv, camera, event.key, chat, sprite_groups)
         if event.type == pg.MOUSEBUTTONDOWN:
@@ -248,7 +249,7 @@ def draw(screen, all_sprites, map_img, map_rect, inv, chat, camera):
         screen.blit(sprite.image, camera.apply(sprite))
         sprite.draw(screen, camera)
     inv.render(screen)  # RENDER INVENTORY
-    # chat.update(screen)
+    chat.update(screen)
 
     pg.display.update()
 
@@ -345,7 +346,6 @@ def run():
     running = True
     inv = Inventory((WIDTH, HEIGHT))
 
-
     state = 'LOGIN'
     state, username, password = login_state(screen, clock)
 
@@ -376,17 +376,15 @@ def run():
         inv.add_item(item)
 
     # CHAT:
-    # client_chat = chat_client(username)
-    # client_chat.start()
-    # chat = Chat(client_chat, username=username)
-    # chat_thread = threading.Thread(target=client_chat.receive, args=(chat,))
-    # chat_thread.start()
-    chat = None
+    client_chat = ChatClient(username)
+    client_chat.start()
+    chat = Chat(client_chat, username=username)
+    chat_thread = threading.Thread(target=client_chat.receive, args=(chat,))
+    chat_thread.start()
 
     # speed_pot = Item("speed_pot", player)
     # inv.add_item(speed_pot)
     # player.items.add(speed_pot)
-
 
     while running:
         if state == 'GAME':
