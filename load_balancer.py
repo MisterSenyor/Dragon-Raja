@@ -1,7 +1,4 @@
-import logging
-from typing import Dict
-
-from my_server import MainPlayer, MyJSONEncoder, generate_id
+from my_server import MyJSONEncoder, default_player
 from utils import *
 
 
@@ -23,9 +20,7 @@ class LoadBalancer:
         self.socket.sendto(data, address)
 
     def connect(self, data, client):
-        items = {str(generate_id()): "speed_pot", str(generate_id()): "heal_pot", str(generate_id()): "strength_pot"}
-        player = MainPlayer(id=None, start_pos=(1400, 1360), end_pos=None,
-                            health=100, items=items, t0=0, username=data['username'], effects=[])
+        player = default_player(data['username'])
         chunk = get_chunk(player.start_pos)
         server = self.get_server(chunk)
         self.clients[player.id] = client
