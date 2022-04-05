@@ -1,7 +1,7 @@
 import logging
 from typing import Dict
 
-from my_server import Player, MyJSONEncoder, generate_id
+from my_server import MainPlayer, MyJSONEncoder, generate_id
 from utils import *
 
 
@@ -24,8 +24,8 @@ class LoadBalancer:
 
     def connect(self, data, client):
         items = {str(generate_id()): "speed_pot"}
-        player = Player(id=None, start_pos=(1400, 1360), end_pos=None,
-                        health=100, items=items, t0=0, username=data['username'])
+        player = MainPlayer(id=None, start_pos=(1400, 1360), end_pos=None,
+                            health=100, items=items, t0=0, username=data['username'], effects=[])
         chunk = get_chunk(player.start_pos)
         server = self.get_server(chunk)
         self.clients[player.id] = client

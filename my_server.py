@@ -20,6 +20,10 @@ from utils import *
 pg.display.set_mode((40, 40))
 
 
+def game_ticks_to_ns(game_ticks: int):
+    return game_ticks / (10 ** -9) / FPS
+
+
 def check_collisions(direction: tuple, pos_before: tuple, pos_after: tuple, size: tuple, target_pos: tuple,
                      target_size: tuple) -> tuple:
     temp = pg.Rect(pos_after, size)
@@ -55,7 +59,17 @@ class MyJSONEncoder(json.JSONEncoder):
             return data
         if isinstance(o, Dropped):
             return o.__dict__.copy()
+        if isinstance(o, Effect):
+            data = o.__dict__.copy()
+            data['duration'] -= time.time_ns() - data.pop('t0')
+            return data
         return super(MyJSONEncoder, self).default(o)
+
+
+def player_from_dict(data: dict):
+    effects = [Effect(duration=e['duration'], t0=time.time_ns(), type=e['type']) for e in data.pop('effects')]
+    p = MainPlayer(**data, t0=time.time_ns(), effects=effects)
+    return p
 
 
 @dataclass
@@ -105,7 +119,7 @@ class Entity(MovingObject, ABC):
         dist = ((self.end_pos[0] - self.start_pos[0]) ** 2 + (self.end_pos[1] - self.start_pos[1]) ** 2) ** 0.5
         if dist == 0:
             return self.start_pos
-        norm_speed = self.get_speed() * (10 ** -9) * FPS  # speed / 1 game tick = speed / (100 * 10 ** -9 nanosecs)
+        norm_speed = self.get_speed() / game_ticks_to_ns(1)
         total_time = dist / norm_speed
         p = (t - self.t0) / total_time
         if p > 1:
@@ -115,15 +129,44 @@ class Entity(MovingObject, ABC):
 
 
 @dataclass
+class Effect:
+    type: str
+    t0: int
+    duration: int
+
+    def is_over(self, t: int = None):
+        t = t if t is not None else time.time_ns()
+        return t > self.t0 + self.duration
+
+
+@dataclass
 class Player(Entity):
     username: str
     items: Dict[str, str]  # ids are numbers converted to strings, e.g "123"
+    effects: List[Effect]
+
+    def use_item(self, item_id: str):
+        item_type = self.items.pop(item_id)
+        if item_type == 'heal_pot':
+            if self.health < 80:
+                self.health += 20
+            else:
+                self.health = 100
+        else:
+            self.effects.append(Effect(item_type, time.time_ns(), game_ticks_to_ns(1000)))
+
+    def check_effects(self):
+        for effect in self.effects[:]:
+            if effect.is_over():
+                self.effects.remove(effect)
 
     def get_damage(self):
-        return 20
+        self.check_effects()
+        return 20 + sum([10 for x in self.effects if x.type == 'strength_pot'])
 
     def get_speed(self):
-        return 5
+        self.check_effects()
+        return 5 + sum([3 for x in self.effects if x.type == 'speed_pot'])
 
 
 # used for encoding items
@@ -224,7 +267,7 @@ class Server:
     def connect(self, data, address):
         items = {str(generate_id()): "speed_pot"}
         player = MainPlayer(id=None, start_pos=(1400, 1360), end_pos=None,
-                            health=100, items=items, t0=0, username=data['username'])
+                            health=100, items=items, t0=0, username=data['username'], effects=[])
         self.updates.append({'cmd': 'player_enters', 'player': player})
 
         data = json.dumps({
@@ -341,7 +384,8 @@ class Server:
         elif cmd == 'attack':
             self.attacking_players.append(player.id)
         elif cmd == 'use_item':
-            item_type = player.items.pop(data['item_id'])
+            item_type = player.items[data['item_id']]
+            player.use_item(data['item_id'])
             data = {'cmd': cmd, 'item_type': item_type, 'id': data['id']}
         elif cmd == 'item_dropped':
             if dist(data['pos'], player.get_pos(t)) < 250:

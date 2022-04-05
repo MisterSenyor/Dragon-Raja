@@ -63,14 +63,14 @@ class NewServer(Server):
         logging.debug(f'new client connected: {client=}, {player=}')
 
     def connect(self, data, address):
-        player = Player(**data['player'], t0=time.time_ns(), items={})
+        player = player_from_dict(data['player'])
         self.updates.append({'cmd': 'player_enters', 'player': player})
         self.add_client(player, data['client'], init=True)
         self.players[player.id] = player
 
     def add_player(self, data):
         if data['player']['id'] not in self.players:
-            player = Player(**data['player'], t0=time.time_ns(), items={})
+            player = player_from_dict(data['player'])
             self.players[player.id] = player
 
     def remove_player(self, data):
@@ -119,8 +119,11 @@ class NewServer(Server):
 
     def handle_client_update(self, data, address):
         cmd = data['cmd']
-        if cmd in ['move', 'attack', 'projectile', 'disconnect', 'item_dropped', 'item_picked']:
-            player = self.players[data['id']]
+        if cmd not in ['move', 'attack', 'projectile', 'disconnect', 'item_dropped', 'item_picked', 'use_item']:
+            logging.warning(f'unknown client cmd: {data=}, {address=}')
+            return
+
+        player = self.players[data['id']]
         chunk = get_chunk(player.get_pos())
         logging.debug(f'{chunk=}, {data=}')
 
