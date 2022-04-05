@@ -15,9 +15,17 @@ from scipy.spatial import KDTree
 
 import settings
 # from server_chat import chat_server
+from server_chat import *
 from utils import *
 
 pg.display.set_mode((40, 40))
+
+
+def default_player(username):
+    items = {str(generate_id()): "speed_pot", str(generate_id()): "heal_pot", str(generate_id()): "strength_pot"}
+    cooldowns = {'skill': Cooldown(duration=0, t0=0), 'projectile': Cooldown(duration=0, t0=0)}
+    return MainPlayer(id=None, start_pos=(1400, 1360), end_pos=None,
+                      health=100, items=items, t0=0, username=username, effects=[], cooldowns=cooldowns)
 
 
 def game_ticks_to_ns(game_ticks: int):
@@ -59,7 +67,7 @@ class MyJSONEncoder(json.JSONEncoder):
             return data
         if isinstance(o, Dropped):
             return o.__dict__.copy()
-        if isinstance(o, Effect):
+        if isinstance(o, Cooldown):
             data = o.__dict__.copy()
             data['duration'] -= time.time_ns() - data.pop('t0')
             return data
@@ -68,7 +76,9 @@ class MyJSONEncoder(json.JSONEncoder):
 
 def player_from_dict(data: dict):
     effects = [Effect(duration=e['duration'], t0=time.time_ns(), type=e['type']) for e in data.pop('effects')]
-    p = MainPlayer(**data, t0=time.time_ns(), effects=effects)
+    cooldowns = {action: Cooldown(duration=c['duration'], t0=time.time_ns()) for action, c
+                 in data.pop('cooldowns').items()}
+    p = MainPlayer(**data, t0=time.time_ns(), effects=effects, cooldowns=cooldowns)
     return p
 
 
@@ -129,8 +139,7 @@ class Entity(MovingObject, ABC):
 
 
 @dataclass
-class Effect:
-    type: str
+class Cooldown:
     t0: int
     duration: int
 
@@ -140,10 +149,16 @@ class Effect:
 
 
 @dataclass
+class Effect(Cooldown):
+    type: str
+
+
+@dataclass
 class Player(Entity):
     username: str
     items: Dict[str, str]  # ids are numbers converted to strings, e.g "123"
     effects: List[Effect]
+    cooldowns: Dict[str, Cooldown]  # action to duration (ns)
 
     def use_item(self, item_id: str):
         item_type = self.items.pop(item_id)
@@ -153,7 +168,7 @@ class Player(Entity):
             else:
                 self.health = 100
         else:
-            self.effects.append(Effect(item_type, time.time_ns(), game_ticks_to_ns(1000)))
+            self.effects.append(Effect(type=item_type, t0=time.time_ns(), duration=game_ticks_to_ns(1000)))
 
     def check_effects(self):
         for effect in self.effects[:]:
@@ -265,9 +280,7 @@ class Server:
                     self.mob_attack(mob=m, player=player)
 
     def connect(self, data, address):
-        items = {str(generate_id()): "speed_pot", str(generate_id()): "heal_pot", str(generate_id()): "strength_pot"}
-        player = MainPlayer(id=None, start_pos=(1400, 1360), end_pos=None,
-                            health=100, items=items, t0=0, username=data['username'], effects=[])
+        player = default_player(data['username'])
         self.updates.append({'cmd': 'player_enters', 'player': player})
 
         data = json.dumps({
@@ -342,7 +355,7 @@ class Server:
 
         if not isinstance(o1, Entity):
             result = self.handle_collision(o2, o1)
-            
+
         if isinstance(o1, Player):
             size1 = PLAYER_SIZE
         elif isinstance(o1, Mob):
@@ -351,14 +364,13 @@ class Server:
             size2 = PLAYER_SIZE
         elif isinstance(o2, Mob):
             size2 = MOB_SIZE
-            
+
         t = time.time_ns()
         if isinstance(o1, Entity):
             curr_pos = o1.get_pos(t)
             game_tick = (10 ** 9) / FPS  # in ns
             next_pos = o1.get_pos(t + game_tick)
-            
-            collision_pos = check_collisions((o1.start_pos[0] - o1.end_pos[0], o1.start_pos[1] - o1.end_pos[1]), curr_pos, next_pos, size1, o2[0], o2[1])
+            collision_pos = check_collisions(direction, curr_pos, next_pos, size1, o2[0], o2[1])
             if collision_pos != next_pos:
                 o1.end_pos = collision_pos
                 result = True
@@ -394,7 +406,11 @@ class Server:
         if cmd == 'move':
             player.move(data['pos'])
         elif cmd == 'projectile':
+            if not player.cooldowns['projectile'].is_over():
+                return
             proj = Projectile(**data['projectile'], start_pos=player.get_pos(t), t0=t, id=None)
+            player.cooldowns['projectile'].t0 = time.time_ns()
+            player.cooldowns['projectile'].duration = 10 ** 9
             self.projectiles[proj.id] = proj
         elif cmd == 'attack':
             self.attacking_players.append(player.id)
@@ -418,6 +434,9 @@ class Server:
             else:
                 raise Exception('bad client, cannot pickup item')
         elif cmd == 'use_skill':
+            if not player.cooldowns['skill'].is_over():
+                return
+            logging.debug(f"{player.cooldowns['skill']=}")
             if data['skill_id'] == 1:
                 vect = pg.math.Vector2(0, 1)
                 for i in range(0, 9):
@@ -449,13 +468,15 @@ class Server:
 
                 item_id = str(generate_id())
                 player.items[item_id] = 'heal_pot'
+            player.cooldowns['skill'].t0 = time.time_ns()
+            player.cooldowns['skill'].duration = 10 * 10 ** 9
         self.updates.append(data)
 
     def receive_packets(self):
         while True:
             try:
                 msg, address = self.socket.recvfrom(settings.HEADER_SIZE)
-                data = json.loads(msg.decode())
+                data = json.loads(decrypt_packet(msg).decode())
                 logging.debug(f'received data: {data=}')
 
                 if data["cmd"] == "connect":
@@ -490,8 +511,8 @@ def main():
     receive_thread = threading.Thread(target=server.receive_packets)
     receive_thread.start()
     # INITIALIZE CHAT SERVER:
-    # server_chat = chat_server()
-    # threading.Thread(target=server_chat.start).start()
+    server_chat = ChatServer()
+    threading.Thread(target=server_chat.start).start()
 
     while True:
         time.sleep(settings.UPDATE_TICK)
