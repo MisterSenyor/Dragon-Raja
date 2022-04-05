@@ -45,6 +45,11 @@ class Entity(pg.sprite.Sprite):
             self.change_status('run')  # CHANGE STATUS TO RUN UNLESS ATTACKING
         self._start = self.rect.center
         self._end = x, y
+        
+        self.image = self.original_image
+        if x < self.rect.center[0]:
+            self.image = pg.transform.flip(self.image, True, False)
+            
         dist = ((self._end[0] - self._start[0]) ** 2 + (self._end[1] - self._start[1]) ** 2) ** 0.5
         self._t = dist / self.walk_speed
         self._i = 0
@@ -59,6 +64,7 @@ class Entity(pg.sprite.Sprite):
         UPDATES PLAYER LOCATION:
         for each iteration update pos by averaging the 'start' and 'end' for each axis
         """
+        self.image = self.animation.image
         for item in self.items:
             item.update()
         if self.health <= 0:
@@ -90,9 +96,6 @@ class Entity(pg.sprite.Sprite):
         if self.animation_tick % self.anim_speed == 0:
             self.animation.update()
         self.animation_tick += 1
-        self.image = self.animation.image
-        if self.direction:
-            self.image = pg.transform.flip(self.image, True, False)
         if self.status == 'attack':
             # CHECK IF ATTACK IS FINISHED:
             if self.animation.surface_index == len(self.animation.surfaces) - 1:
