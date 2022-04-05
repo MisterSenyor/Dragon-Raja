@@ -46,7 +46,7 @@ class Entity(pg.sprite.Sprite):
         self._start = self.rect.center
         self._end = x, y
         
-        self.image = self.original_image
+        self.image = self.normal_image
         if x < self.rect.center[0]:
             self.image = pg.transform.flip(self.image, True, False)
             
