@@ -1,5 +1,6 @@
 import logging
 import random
+import time
 from typing import Iterable
 import sys
 import pygame as pg
@@ -177,7 +178,11 @@ class Player(Entity):
 class MainPlayer(Player):
     def __init__(self, sock_client: 'client.Client', *args, **kwargs):
         self.client = sock_client
+        self.cooldowns = {'skill': 0, 'projectile': 0}
         super(MainPlayer, self).__init__(*args, **kwargs)
+
+    def is_cooldown_over(self, action):
+        return time.time_ns() > self.cooldowns[action]
 
     def move(self, x, y, send_update=True):
         super(MainPlayer, self).move(x, y)
@@ -190,10 +195,12 @@ class MainPlayer(Player):
             self.client.send_update('attack', {'id': self.id})
 
     def use_skill(self, skill_id, sprite_groups, inv, send_update=True):
-        super(MainPlayer, self).use_skill(skill_id, sprite_groups, inv, send_update=send_update)
-        if send_update:
-            self.client.send_update('use_skill',
-                                    {'id': self.id, 'skill_id': skill_id})
+        if self.is_cooldown_over('skill'):
+            super(MainPlayer, self).use_skill(skill_id, sprite_groups, inv, send_update=send_update)
+            if send_update:
+                self.client.send_update('use_skill', {'id': self.id, 'skill_id': skill_id})
+            else:
+                self.cooldowns['skill'] = time.time_ns() + 10 * 10 ** 9
 
     def drop_item(self, inv, sprite_groups, send_update=True):
         """ DROPS ITEM FROM CURRENT SLOT ON THE GROUND"""
