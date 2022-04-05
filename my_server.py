@@ -342,11 +342,26 @@ class Server:
 
         if not isinstance(o1, Entity):
             result = self.handle_collision(o2, o1)
+            
+        if isinstance(o1, Player):
+            size1 = PLAYER_SIZE
+        elif isinstance(o1, Mob):
+            size1 = MOB_SIZE
+        if isinstance(o2, Player):
+            size2 = PLAYER_SIZE
+        elif isinstance(o2, Mob):
+            size2 = MOB_SIZE
+            
         t = time.time_ns()
-        curr_pos = entity.get_pos(t)
-        game_tick = (10 ** 9) / FPS  # in ns
-        next_pos = entity.get_pos(t + game_tick)
-        collision_pos = check_collisions(direction, curr_pos, next_pos, o1.size)
+        if isinstance(o1, Entity):
+            curr_pos = o1.get_pos(t)
+            game_tick = (10 ** 9) / FPS  # in ns
+            next_pos = o1.get_pos(t + game_tick)
+            
+            collision_pos = check_collisions(direction, curr_pos, next_pos, size1, o2[0], o2[1])
+            if collision_pos != next_pos:
+                o1.end_pos = collision_pos
+                result = True
         return result
 
     def collisions_handler(self):
