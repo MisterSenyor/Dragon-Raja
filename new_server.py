@@ -119,7 +119,8 @@ class NewServer(Server):
 
     def handle_client_update(self, data, address):
         cmd = data['cmd']
-        if cmd not in ['move', 'attack', 'projectile', 'disconnect', 'item_dropped', 'item_picked', 'use_item']:
+        if cmd not in ['move', 'attack', 'projectile', 'disconnect', 'item_dropped', 'item_picked',
+                       'use_item', 'use_skill']:
             logging.warning(f'unknown client cmd: {data=}, {address=}')
             return
 

@@ -14,7 +14,7 @@ import pygame as pg
 from scipy.spatial import KDTree
 
 import settings
-from server_chat import chat_server
+# from server_chat import chat_server
 from utils import *
 
 pg.display.set_mode((40, 40))
@@ -265,7 +265,7 @@ class Server:
                     self.mob_attack(mob=m, player=player)
 
     def connect(self, data, address):
-        items = {str(generate_id()): "speed_pot"}
+        items = {str(generate_id()): "speed_pot", str(generate_id()): "heal_pot", str(generate_id()): "strength_pot"}
         player = MainPlayer(id=None, start_pos=(1400, 1360), end_pos=None,
                             health=100, items=items, t0=0, username=data['username'], effects=[])
         self.updates.append({'cmd': 'player_enters', 'player': player})
@@ -402,6 +402,38 @@ class Server:
                 del data['id']
             else:
                 raise Exception('bad client, cannot pickup item')
+        elif cmd == 'use_skill':
+            if data['skill_id'] == 1:
+                vect = pg.math.Vector2(0, 1)
+                for i in range(0, 9):
+                    # CIRCLE OF AXES:
+                    axe = Projectile(id=None, start_pos=player.get_pos(t), type="axe", attacker_id=player.id, t0=t,
+                                     target=tuple(vect))
+                    self.projectiles[axe.id] = axe
+                    vect = vect.rotate(45)
+            elif data['skill_id'] == 2:
+                # BUFFS USING (INSTANTLY USED) ITEMS:
+                item_id = str(generate_id())
+                player.items[item_id] = 'speed_pot'
+                player.use_item(item_id)
+
+                item_id = str(generate_id())
+                player.items[item_id] = 'strength_pot'
+                player.use_item(item_id)
+
+                item_id = str(generate_id())
+                player.items[item_id] = 'heal_pot'
+                player.use_item(item_id)
+            elif data['skill_id'] == 3:
+                # GET POTIONS IN INVENTORY:
+                item_id = str(generate_id())
+                player.items[item_id] = 'speed_pot'
+
+                item_id = str(generate_id())
+                player.items[item_id] = 'strength_pot'
+
+                item_id = str(generate_id())
+                player.items[item_id] = 'heal_pot'
         self.updates.append(data)
 
     def receive_packets(self):
@@ -443,8 +475,8 @@ def main():
     receive_thread = threading.Thread(target=server.receive_packets)
     receive_thread.start()
     # INITIALIZE CHAT SERVER:
-    server_chat = chat_server()
-    threading.Thread(target=server_chat.start).start()
+    # server_chat = chat_server()
+    # threading.Thread(target=server_chat.start).start()
 
     while True:
         time.sleep(settings.UPDATE_TICK)
