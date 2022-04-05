@@ -18,12 +18,6 @@ def create_entity(cls, data, sprite_groups, walk_speed, animations, anim_speed, 
     return entity
 
 
-def get_by_id(group, id_):
-    sprites = group.sprites()
-    ids = [sprite.id for sprite in sprites]
-    return sprites[ids.index(id_)]
-
-
 class Client:
     def __init__(self, sock: socket.socket, server: Address, sprite_groups: Dict[str, pygame.sprite.Group],
                  player_animations, player_anim_speed, mob_animations, mob_anim_speed, player_walk_speed,
@@ -104,10 +98,19 @@ class Client:
             logging.exception(f'exception in init')
 
     def get_entity_by_id(self, id_: int):
-        return get_by_id(self.sprite_groups['entity'], id_)
+        sprites = self.sprite_groups['entity'].sprites()
+        ids = [sprite.id for sprite in sprites]
+        return sprites[ids.index(id_)]
 
     def get_dropped_by_id(self, id_: int):
-        return get_by_id(self.sprite_groups['dropped'], id_)
+        sprites = self.sprite_groups['dropped'].sprites()
+        ids = [sprite.item_id for sprite in sprites]
+        return sprites[ids.index(id_)]
+
+    def get_shadow_by_id(self, id_: int):
+        sprites = self.sprite_groups['shadows'].sprites()
+        ids = [sprite.id for sprite in sprites]
+        return sprites[ids.index(id_)]
 
     def handle_update(self, update: dict):
         cmd = update['cmd']
@@ -135,7 +138,7 @@ class Client:
                 self.create_dropped(drop_data)
         elif ENABLE_SHADOWS and cmd == 'shadows':
             for player in update['players']:
-                shadow = get_by_id(self.sprite_groups['shadows'], player['id'] + 1)
+                shadow = self.get_shadow_by_id(player['id'] + 1)
                 shadow.rect.center = player['pos']
         elif update['id'] != self.main_player.id:
             entity = self.get_entity_by_id(update['id'])
