@@ -83,8 +83,8 @@ class ChatServer:
 
 
 def main():
-    server_chat = ChatServer()
-    threading.Thread(target=server_chat.start).start()
+    server1 = ChatServer()
+    server1.start()
 
 
 if __name__ == "__main__":

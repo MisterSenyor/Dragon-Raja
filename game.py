@@ -249,7 +249,6 @@ def draw(screen, all_sprites, map_img, map_rect, inv, chat, camera):
         screen.blit(sprite.image, camera.apply(sprite))
         sprite.draw(screen, camera)
     inv.render(screen)  # RENDER INVENTORY
-
     chat.update(screen)
 
     pg.display.update()

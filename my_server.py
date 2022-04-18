@@ -381,7 +381,7 @@ class Server:
             curr_pos = o1.get_pos(t)
             game_tick = (10 ** 9) / FPS  # in ns
             next_pos = o1.get_pos(t + game_tick)
-            collision_pos = check_collisions((o1.end_pos[0] - o1.start_pos[0], o1.end_pos[1] - o1.start_pos[1]), curr_pos, next_pos, size1, o2[0], o2[1])
+            collision_pos = check_collisions(direction, curr_pos, next_pos, size1, o2[0], o2[1])
             if collision_pos != next_pos:
                 o1.end_pos = collision_pos
                 result = True
