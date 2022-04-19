@@ -61,8 +61,9 @@ class NewServer(Server):
                 mob.move(pos=player_pos)
                 self.updates.append({'cmd': 'move', 'pos': player_pos, 'id': mob.id})
 
-    def add_client(self, player, client, client_public_key, init):
-        client = tuple(client)
+    def add_client(self, player, client_addr, client_public_key, init):
+        client_public_key = client_public_key.encode()
+        client_addr = tuple(client_addr)
         if init:
             json_data = {
                 'cmd': 'init',
@@ -82,16 +83,16 @@ class NewServer(Server):
         data = json.dumps(json_data, cls=MyJSONEncoder).encode() + b'\n'
         loaded_key = serialization.load_pem_public_key(client_public_key)
         fernet = get_fernet(loaded_key, self.server_private_key)
-        self.client_public_keys[client] = client_public_key
+        self.client_public_keys[client_addr] = client_public_key
         self.fernets[client_public_key] = fernet
 
-        send_all(self.socket, data, client, self.fernets[self.client_public_keys[client]])
-        logging.debug(f'new client connected: {client=}, {player=}')
+        send_all(self.socket, data, client_addr, self.fernets[self.client_public_keys[client_addr]])
+        logging.debug(f'new client connected: {client_addr=}, {player=}')
 
     def connect(self, data, address):
         player = player_from_dict(data['player'])
         self.updates.append({'cmd': 'player_enters', 'player': player})
-        self.add_client(player, data['client'], data['client_key'].encode(), init=True)
+        self.add_client(player, data['client'], data['client_key'], init=True)
         self.players[player.id] = player
 
     def add_player(self, data):

@@ -52,7 +52,8 @@ class LoadBalancer:
                     client = self.clients[update['id']]
                     logging.debug(f'client changed server: {client=}, {address=}, {new_server=}')
                     self.send_cmd('redirect', {'server': new_server}, client)
-                    self.send_cmd('add_client', {'client': client, 'id': update['id']}, new_server)
+                    self.send_cmd('add_client', {'client': client, 'id': update['id'],
+                                                 'client_key': self.client_public_keys[client].decode()}, new_server)
                     self.send_cmd('remove_client', {'client': client, 'id': update['id']}, address)
                 for adj_server_idx in range(len(self.servers)):
                     if adj_server_idx in get_adj_server_idx(self.chunk_mapping, chunk_idx) or \
