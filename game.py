@@ -344,7 +344,7 @@ def run():
     pg.mouse.set_cursor(pg.cursors.broken_x)
 
     running = True
-    inv = Inventory((WIDTH, HEIGHT))
+    inv = Inventory((WIDTH, HEIGHT), "sword")
 
     state = 'LOGIN'
     state, username, password = login_state(screen, clock)

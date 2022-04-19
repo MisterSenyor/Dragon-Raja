@@ -215,7 +215,8 @@ class MainPlayer(Player):
             else:
                 pos = self.rect.topright
             if send_update:
-                self.client.send_update('item_dropped', {'item_id': item.item_id, 'id': self.id, 'pos': self.rect.center})
+                self.client.send_update('item_dropped',
+                                        {'item_id': item.item_id, 'id': self.id, 'pos': self.rect.center})
             item.kill()
 
     def pick_item(self, inv: 'Inventory', sprite_groups, send_update=True):
@@ -302,7 +303,7 @@ class Mob(Entity):
 class Item(pg.sprite.Sprite):
     """" ITEM CLASS, GETS ITEM TYPE, OWNER (ENTITY)"""
 
-    def __init__(self, item_type, owner: Entity, item_id = 1):
+    def __init__(self, item_type, owner: Entity, item_id=1):
         self.group = owner.items
         self.item_type = item_type
         self.item_id = item_id
@@ -370,7 +371,7 @@ class Dropped(pg.sprite.Sprite):
 
 
 class Inventory:
-    def __init__(self, screen_size):
+    def __init__(self, screen_size, weapon_held='sword'):
         self.slots = []
         for i in range(INVENTORY_SIZE):
             self.slots.append(0)
@@ -381,6 +382,9 @@ class Inventory:
         self.slot_img = pg.image.load("Graphics/cur_slot.png")
         self.cur_slot = 0  # current slot
         self.font = pg.font.Font(pg.font.get_default_font(), 25)
+        self.special_slot_img = pg.image.load("Graphics/slot.png")
+        self.weapon_held = weapon_held
+        self.weapon_img = pg.image.load("Graphics/weapons/" + weapon_held + ".png")
 
     def render(self, screen):
         # DRAW INVENTORY:
@@ -401,6 +405,11 @@ class Inventory:
         # DRAW OUTLINE AROUND CURRENT SLOT:
         screen.blit(self.slot_img, (self.rect.topleft[0] + self.cur_slot * 40, self.rect.topleft[1]))
 
+        # DRAW SPECIAL SLOT
+        screen.blit(self.special_slot_img, (self.rect.topleft[0] - 60, self.rect.topleft[1]))
+        # DRAW SPECIAL ITEM (WEAPON HELD)
+        screen.blit(self.weapon_img, (self.rect.topleft[0] - 65, self.rect.topleft[1]))
+
     def is_full(self):
         """ RETURNS TRUE IF INVENTORY IS FULL, IF NO SLOTS AVAILABLE RETURNS FALSE"""
         for i in range(INVENTORY_SIZE):
@@ -414,6 +423,7 @@ class Inventory:
             if self.slots[i] == 0:
                 self.slots[i] = item
                 return
+        # NO SLOT AVAILABLE:
         print("INVENTORY FULL")
 
     def remove_item(self, slot: int):
@@ -423,6 +433,13 @@ class Inventory:
             return
         else:
             print("SLOT EMPTY")
+
+    def switch_weapon(self, weapon: str):
+        """ SWITCHES WEAPON HELD AT SPECIAL SLOT"""
+        if self.weapon_held != weapon:
+            self.weapon_img = pg.image.load("Graphics/weapons/" + weapon + ".png")
+            self.weapon_held = weapon
+        return
 
 
 class Projectile(pg.sprite.Sprite):
@@ -502,7 +519,7 @@ class Chat(pg.sprite.Sprite):
     OTHERWISE STARTS AS EMPTY CHAT
     """
 
-    def __init__(self, client_chat, lines=collections.deque([]), username = ''):
+    def __init__(self, client_chat, lines=collections.deque([]), username=''):
         pg.sprite.Sprite.__init__(self)
         self.client_chat = client_chat
         self.font = pg.font.Font(pg.font.get_default_font(), 25)
@@ -511,9 +528,9 @@ class Chat(pg.sprite.Sprite):
         self.color = BLACK
         self.is_pressed = False  # WHETHER BUTTON TO CHAT HAS BEEN PRESSED OR NOT
         if username != '':
-            self.username = username + ': ' # if username given add it (for cur typed)
+            self.username = username + ': '  # if username given add it (for cur typed)
         else:
-            self.username = username # empty string
+            self.username = username  # empty string
 
     def add_line(self, line: str):
         # CHECK IF CHAT NOT FULL:
