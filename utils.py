@@ -3,8 +3,17 @@ import logging
 import socket
 from typing import Tuple, Collection, Any, Dict
 from collections import defaultdict
+from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+from cryptography.hazmat.primitives import serialization
+import base64
 
 from settings import *
+
+
+CURVE = ec.SECP384R1()
 
 
 def send_all(sock: socket.socket, data: bytes, address):
@@ -82,3 +91,80 @@ def encrypt_packet(data):
 
 def decrypt_packet(data):
     return data
+
+
+def serialize_public_key(key):
+    return key.public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo
+    )
+
+
+def serialize_private_key(key):
+    return key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption()
+    )
+
+
+def generate_ecdh_key():
+    with open('private.PEM', 'wb') as file:
+        private_key = ec.generate_private_key(
+            CURVE
+        )
+        serialized_private = serialize_private_key(private_key)
+        file.write(serialized_private)
+    with open('public.PEM', 'wb') as file:
+        public_key = private_key.public_key()
+        serialized_public = serialize_public_key(public_key)
+        file.write(serialized_public)
+    return private_key
+
+
+def load_public_ecdh_key():
+    with open('public.PEM', 'rb') as file:
+        loaded_public_key = serialization.load_pem_public_key(
+            file.read(),
+        )
+        return loaded_public_key
+
+
+def load_private_ecdh_key():
+    with open('private.PEM', 'rb') as file:
+        loaded_private_key = serialization.load_pem_private_key(
+            file.read(),
+            # or password=None, if in plain text
+            password=None,
+        )
+        return loaded_private_key
+
+
+def get_fernet(public_key, private_key):
+    shared_key = private_key.exchange(ec.ECDH(), public_key)
+    derived_key = HKDF(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=None,
+        info=b'handshake data',
+    ).derive(shared_key)
+    derived_key = base64.urlsafe_b64encode(derived_key)
+    return Fernet(derived_key)
+
+
+def client():
+    # generate_ecdh_key()
+    server_public_key = load_public_ecdh_key()
+    client_private_key = ec.generate_private_key(CURVE)
+    fernet = get_fernet(server_public_key, client_private_key)
+    serialized_client_public_key = serialize_public_key(client_private_key.public_key())
+
+    encrypted = server(serialized_client_public_key)
+    print(fernet.decrypt(encrypted))
+
+
+def server(serialized_client_public_key):
+    server_private_key = load_private_ecdh_key()
+    client_public_key = serialization.load_pem_public_key(serialized_client_public_key)
+    fernet = get_fernet(client_public_key, server_private_key)
+    return fernet.encrypt(b'123')
