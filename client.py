@@ -1,9 +1,6 @@
-from typing import Dict
-
 import pygame
 
 import entities
-from network.utils import Address
 from utils import *
 
 
@@ -22,8 +19,12 @@ class Client:
     def __init__(self, sock: socket.socket, server: Address, sprite_groups: Dict[str, pygame.sprite.Group],
                  player_animations, player_anim_speed, mob_animations, mob_anim_speed, player_walk_speed,
                  mob_walk_speed):
+        self.fernet = None
+        self.serialized_public_key = None
+        self.fernet_init()
+
         self.sock = sock
-        self.sock_wrapper = JSONSocketWrapper(self.sock)
+        self.sock_wrapper = JSONSocketWrapper(self.sock, self.fernet)
         self.server = server
         self.sprite_groups = sprite_groups
 
@@ -42,8 +43,18 @@ class Client:
         self.player_sprite_groups = self.entity_sprite_groups + [self.sprite_groups['players']]
         self.dropped_sprite_groups = [self.sprite_groups['all'], self.sprite_groups['dropped']]
 
+    def fernet_init(self):
+        server_public_key = load_public_ecdh_key()
+        client_private_key = ec.generate_private_key(CURVE)
+        self.fernet = get_fernet(server_public_key, client_private_key)
+        self.serialized_public_key = serialize_public_key(client_private_key.public_key())
+
+    def send_data(self, data: bytes, dst):
+        data = self.serialized_public_key + self.fernet.encrypt(data)
+        self.sock.sendto(data, dst)
+
     def send_update(self, cmd: str, params: dict):
-        self.sock.sendto(decrypt_packet(json.dumps({'cmd': cmd, **params}).encode() + b'\n'), self.server)
+        self.send_data(json.dumps({'cmd': cmd, **params}).encode() + b'\n', self.server)
 
     def create_main_player(self, data):
         return self.create_player(data, cls=entities.MainPlayer, sock_client=self)

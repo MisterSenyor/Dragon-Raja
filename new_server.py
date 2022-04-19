@@ -1,5 +1,3 @@
-import logging
-import random
 import sys
 
 from my_server import *
@@ -11,6 +9,11 @@ class NewServer(Server):
                  shared_chunks: List[Tuple[int, int]]):
         super(NewServer, self).__init__(sock=sock)
         self.lb_address = lb_address
+        self.lb_fernet = Fernet(b'GdOlkJDG--qPm68eRezrMGmFgnAC5MP3auN8Ts85lkc=')
+
+        self.fernets: Dict[bytes, Fernet] = {}  # client public key to fernet
+        self.client_public_keys: Dict[Address, bytes] = {}  # client address to public key
+        self.server_private_key = load_private_ecdh_key()
 
         self.server_chunks = server_chunks
         self.shared_chunks = shared_chunks
@@ -19,6 +22,18 @@ class NewServer(Server):
         logging.debug(f'{self.private_chunks=}')
 
         self.forwarded_updates = []
+
+    def recv_json(self) -> Tuple[dict, Any]:
+        msg, address = self.socket.recvfrom(settings.HEADER_SIZE)
+        if address == self.lb_address:
+            data = self.lb_fernet.decrypt(msg)
+            return json.loads(data), address
+        public_key, data = get_pk_and_data(msg)
+        if public_key in self.fernets:
+            data = self.fernets[public_key].decrypt(data)
+            json_data = json.loads(data)
+            return json_data, address
+        raise UnknownClientException()
 
     def generate_mobs(self, count):
         for _ in range(count):
@@ -46,10 +61,10 @@ class NewServer(Server):
                 mob.move(pos=player_pos)
                 self.updates.append({'cmd': 'move', 'pos': player_pos, 'id': mob.id})
 
-    def add_client(self, player, client, init):
+    def add_client(self, player, client, client_public_key, init):
         client = tuple(client)
         if init:
-            data = {
+            json_data = {
                 'cmd': 'init',
                 'main_player': player,
                 'players': list(self.players.values()),
@@ -58,21 +73,25 @@ class NewServer(Server):
                 'dropped': list(self.dropped.values())
             }
         else:
-            data = {
+            json_data = {
                 'cmd': 'get_data',
                 'players': list(self.players.values()),
                 'mobs': list(self.mobs.values()),
                 'dropped': list(self.dropped.values())
             }
-        state = json.dumps(data, cls=MyJSONEncoder).encode() + b'\n'
-        send_all(self.socket, state, client)
-        self.clients.append(client)
+        data = json.dumps(json_data, cls=MyJSONEncoder).encode() + b'\n'
+        loaded_key = serialization.load_pem_public_key(client_public_key)
+        fernet = get_fernet(loaded_key, self.server_private_key)
+        self.client_public_keys[client] = client_public_key
+        self.fernets[client_public_key] = fernet
+
+        send_all(self.socket, data, client, self.fernets[self.client_public_keys[client]])
         logging.debug(f'new client connected: {client=}, {player=}')
 
     def connect(self, data, address):
         player = player_from_dict(data['player'])
         self.updates.append({'cmd': 'player_enters', 'player': player})
-        self.add_client(player, data['client'], init=True)
+        self.add_client(player, data['client'], data['client_key'].encode(), init=True)
         self.players[player.id] = player
 
     def add_player(self, data):
@@ -98,10 +117,12 @@ class NewServer(Server):
         if cmd == "connect":
             self.connect(data=data, address=address)
         elif cmd == 'add_client':
-            self.add_client(self.players[data['id']], data['client'], init=False)
+            self.add_client(self.players[data['id']], data['client'], data['client_key'], init=False)
         elif cmd == 'remove_client':
-            if tuple(data['client']) in self.clients:
-                self.clients.remove(tuple(data['client']))
+            if tuple(data['client']) in self.client_public_keys:
+                client = tuple(data['client'])
+                del self.fernets[self.client_public_keys[client]]
+                del self.client_public_keys[client]
         elif cmd == 'update':
             # send updates to clients
             for update in data['updates']:
@@ -110,17 +131,17 @@ class NewServer(Server):
     def receive_packets(self):
         while True:
             try:
-                msg, address = self.socket.recvfrom(settings.HEADER_SIZE)
-                data = json.loads(msg.decode())
-                logging.debug(f'received data: {data=}, {address=}')
-
+                data, address = self.recv_json()
                 if address == self.lb_address:
                     self.handle_lb_update(data=data, address=address)
-                elif address in self.clients:
+                elif address in self.client_public_keys:
+                    data, address = self.recv_json()
+                    logging.debug(f'received data: {data=}, {address=}')
                     # forward update to lb
                     self.handle_client_update(data=data, address=address)
                 else:
-                    logging.warning(f'address not in clients or lb: {address=}, {self.clients=}, {self.lb_address=}')
+                    logging.warning(
+                        f'address not in clients or lb: {address=}, {self.client_public_keys=}, {self.lb_address=}')
             except Exception:
                 logging.exception('exception while handling request')
 
@@ -161,9 +182,20 @@ class NewServer(Server):
         if updates:
             data = json.dumps({'cmd': 'forward_updates', 'updates': updates, 'chunks': chunks,
                                'moving_players': moving_players}, cls=MyJSONEncoder).encode() + b'\n'
-            send_all(self.socket, data, self.lb_address)
+            send_all(self.socket, data, self.lb_address, self.lb_fernet)
             logging.debug(f'updates sent to lb: {updates=}, {chunks=}')
         self.forwarded_updates.clear()
+
+    def send_updates(self):
+        if settings.ENABLE_SHADOWS:
+            self.updates.append({
+                'cmd': 'shadows',
+                'players': [{'id': player.id, 'pos': player.get_pos()} for player in self.players.values()]
+            })
+        data = json.dumps({'cmd': 'update', 'updates': self.updates}, cls=MyJSONEncoder).encode() + b'\n'
+        self.updates.clear()
+        for client in self.client_public_keys:
+            send_all(self.socket, data, client, self.fernets[self.client_public_keys[client]])
 
 
 def main():

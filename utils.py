@@ -1,25 +1,31 @@
+import base64
 import json
 import logging
 import socket
-from typing import Tuple, Collection, Any, Dict
 from collections import defaultdict
+from typing import Tuple, Collection, Any, Dict
+
+import cryptography.fernet
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
-from cryptography.hazmat.primitives import serialization
-import base64
 
 from settings import *
 
-
 CURVE = ec.SECP384R1()
+Address = Tuple[str, int]
 
 
-def send_all(sock: socket.socket, data: bytes, address):
+class UnknownClientException(Exception):
+    pass
+
+
+def send_all(sock: socket.socket, data: bytes, address, fernet):
     try:
         k = 0
-        data = encrypt_packet(data)
+        data = fernet.encrypt(data)
         while k * 1024 < len(data):
             sock.sendto(data[1024 * k: 1024 * (k + 1)], address)
             k += 1
@@ -28,10 +34,11 @@ def send_all(sock: socket.socket, data: bytes, address):
 
 
 class JSONSocketWrapper:
-    def __init__(self, sock: socket.socket, max_iterations=10):
+    def __init__(self, sock: socket.socket, fernet, max_iterations=10):
         self.socket = sock
         self.max_iterations = max_iterations
         self.received: Dict[Any, list] = defaultdict(lambda: [0, b''])
+        self.fernet = fernet
 
     def recv_from(self):
         while True:
@@ -39,11 +46,12 @@ class JSONSocketWrapper:
             self.received[addr][1] += msg
             self.received[addr][0] += 1
             try:
-                json_data = json.loads(decrypt_packet(self.received[addr][1]).decode())
+                data = self.fernet.decrypt(self.received[addr][1])
+                json_data = json.loads(data.decode())
                 # logging.debug(f'received data: {k=}, {len(data)=}, {data=}')
                 del self.received[addr]
                 return json_data, addr
-            except json.JSONDecodeError:
+            except (json.JSONDecodeError, cryptography.fernet.InvalidToken):
                 if self.received[0] == self.max_iterations:
                     logging.warning(f'max iterations exceeded in recv_json')
                     del self.received[addr]
@@ -138,6 +146,13 @@ def load_private_ecdh_key():
             password=None,
         )
         return loaded_private_key
+
+
+def get_pk_and_data(msg: bytes) -> Tuple[bytes, bytes]:
+    print(msg)
+    end = b'-----END PUBLIC KEY-----\n'
+    pk, data = msg.split(end)
+    return pk + end, data
 
 
 def get_fernet(public_key, private_key):

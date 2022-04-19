@@ -10,6 +10,11 @@ class LoadBalancer:
         self.clients = {}  # id to client address
         self.player_chunks: Dict[int, Tuple[int, int]] = {}  # id to chunk
 
+        self.lb_fernet = Fernet(b'GdOlkJDG--qPm68eRezrMGmFgnAC5MP3auN8Ts85lkc=')
+        self.fernets: Dict[bytes, Fernet] = {}  # client pk to fernet
+        self.client_public_keys: Dict[Address, bytes] = {}  # client address to public key
+        self.lb_private_key = load_private_ecdh_key()
+
         self.chunk_mapping = generate_chunk_mapping()
 
     def get_server(self, chunk_idx: Tuple[int, int]):
@@ -17,15 +22,21 @@ class LoadBalancer:
 
     def send_cmd(self, cmd: str, params: dict, address):
         data = json.dumps({'cmd': cmd, **params}, cls=MyJSONEncoder).encode() + b'\n'
-        self.socket.sendto(data, address)
+        if address not in self.servers:
+            fernet = self.fernets[self.client_public_keys[address]]
+        else:
+            fernet = self.lb_fernet
+        self.socket.sendto(fernet.encrypt(data), address)
 
-    def connect(self, data, client):
+    def connect(self, data, client, public_key):
         player = default_player(data['username'])
         chunk = get_chunk(player.start_pos)
         server = self.get_server(chunk)
         self.clients[player.id] = client
         self.player_chunks[player.id] = chunk
-        self.send_cmd('connect', {'player': player, 'client': client}, server)
+        self.send_cmd(cmd='connect',
+                      params={'player': player, 'client': client, 'client_key': public_key.decode()},
+                      address=server)
         self.send_cmd('redirect', {'server': server}, client)
         logging.debug(f'new client connected: {client=}, {player=}, {server=}, {chunk=}')
 
@@ -84,15 +95,27 @@ class LoadBalancer:
         while True:
             try:
                 msg, address = self.socket.recvfrom(1024)
-                data = json.loads(msg)
-                logging.debug(f'received data: {data=}')
 
-                if data["cmd"] == "connect":
-                    if address not in self.servers:
-                        self.connect(data=data, client=address)
-                elif data['cmd'] == 'forward_updates':
-                    if address in self.servers:
+                if address in self.servers:
+                    data = json.loads(self.lb_fernet.decrypt(msg))
+                    if data['cmd'] == 'forward_updates':
+                        logging.debug(f'received data: {data=}, {address=}')
                         self.forward_updates(data, address)
+                else:
+                    public_key, data = get_pk_and_data(msg)
+                    logging.debug(f'received data: {msg=}, {address=}')
+
+                    if public_key not in self.fernets:
+                        loaded_key = serialization.load_pem_public_key(public_key)
+                        self.fernets[public_key] = get_fernet(loaded_key, self.lb_private_key)
+                        self.client_public_keys[address] = public_key
+
+                    data = self.fernets[public_key].decrypt(data)
+                    data = json.loads(data)
+
+                    if data["cmd"] == "connect":
+                        self.connect(data=data, client=address, public_key=public_key)
+
             except Exception:
                 logging.exception('exception while handling request')
 

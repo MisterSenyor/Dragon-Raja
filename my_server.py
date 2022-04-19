@@ -1,19 +1,17 @@
-import logging
+import math
 import math
 import random
-import threading
 import time
-import pygame as pg
-from Tilemap import TiledMap
 from abc import ABC, abstractmethod
-from os import path
 from dataclasses import dataclass
-from typing import Tuple, List, Dict, Optional
+from os import path
+from typing import List, Optional
 
 import pygame as pg
 from scipy.spatial import KDTree
 
 import settings
+from Tilemap import TiledMap
 # from server_chat import chat_server
 from server_chat import *
 from utils import *
@@ -235,7 +233,7 @@ def random_drop_pos(pos):
 class Server:
     def __init__(self, sock: socket.socket):
         self.socket = sock
-        self.clients = []
+        self.client_public_keys = []
 
         self.players: Dict[int, Player] = {}
         self.mobs: Dict[int, Mob] = {}
@@ -304,13 +302,13 @@ class Server:
         }, cls=MyJSONEncoder).encode() + b'\n'
         send_all(self.socket, data, address)
 
-        self.clients.append(address)
+        self.client_public_keys.append(address)
         self.players[player.id] = player
 
         logging.debug(f'new client connected: {address=}, {player=}')
 
     def disconnect(self, data, address):
-        self.clients.remove(address)
+        self.client_public_keys.remove(address)
 
         del self.players[data['id']]
         self.updates.append({'cmd': 'player_leaves', 'id': data['id']})
@@ -491,7 +489,7 @@ class Server:
                 logging.debug(f'received data: {data=}')
 
                 if data["cmd"] == "connect":
-                    if address not in self.clients:
+                    if address not in self.client_public_keys:
                         self.connect(data=data, address=address)
                 elif data["cmd"] == "disconnect":
                     self.disconnect(data=data, address=address)
@@ -508,7 +506,7 @@ class Server:
             })
         data = json.dumps({'cmd': 'update', 'updates': self.updates}, cls=MyJSONEncoder).encode() + b'\n'
         self.updates.clear()
-        for client in self.clients:
+        for client in self.client_public_keys:
             send_all(self.socket, data, client)
 
 
