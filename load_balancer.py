@@ -1,4 +1,7 @@
+import threading
+
 from my_server import MyJSONEncoder, default_player
+from server_chat import *
 from utils import *
 
 
@@ -127,6 +130,11 @@ def main():
     sock.bind(LB_ADDRESS)
 
     lb = LoadBalancer(servers=SERVER_ADDRESSES, sock=sock)
+
+    # setting up chat
+    server_chat = ChatServer()
+    threading.Thread(target=server_chat.start).start()
+
     # for row in lb.chunk_mapping:
     #     print(row)
 

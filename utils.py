@@ -168,7 +168,7 @@ def get_fernet(public_key, private_key):
 
 
 def client():
-    # generate_ecdh_key()
+    generate_ecdh_key()
     server_public_key = load_public_ecdh_key()
     client_private_key = ec.generate_private_key(CURVE)
     fernet = get_fernet(server_public_key, client_private_key)
@@ -183,3 +183,6 @@ def server(serialized_client_public_key):
     client_public_key = serialization.load_pem_public_key(serialized_client_public_key)
     fernet = get_fernet(client_public_key, server_private_key)
     return fernet.encrypt(b'123')
+
+if __name__ == '__main__':
+    client()
