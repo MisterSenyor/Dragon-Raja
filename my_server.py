@@ -55,7 +55,7 @@ def check_collisions(direction: tuple, pos_before: tuple, pos_after: tuple, size
 
 class MyJSONEncoder(json.JSONEncoder):
     def default(self, o):
-        if isinstance(o, MovingObject):
+        if isinstance(o, EntityObject):
             t = time.time_ns()
             data = o.__dict__.copy()
             del data['t0']
@@ -88,7 +88,7 @@ class Dropped:
 
 
 @dataclass
-class MovingObject(ABC):
+class EntityObject(ABC):
     id: Optional[int]
     start_pos: Tuple[int, int]
     t0: int
@@ -107,7 +107,7 @@ class MovingObject(ABC):
 
 
 @dataclass
-class Entity(MovingObject, ABC):
+class Entity(EntityObject, ABC):
     end_pos: Optional[Tuple[int, int]]
     health: int
 
@@ -188,7 +188,7 @@ class MainPlayer(Player):
 
 
 @dataclass
-class Projectile(MovingObject):
+class Projectile(EntityObject):
     target: Tuple[int, int]
     type: str
     attacker_id: int
@@ -237,6 +237,7 @@ class Server:
 
         self.players: Dict[int, Player] = {}
         self.mobs: Dict[int, Mob] = {}
+        self.walls: Dict[int, Entity] = {}
 
         self.projectiles: Dict[int, Projectile] = {}
         self.dropped: Dict[str, Dropped] = {}
@@ -244,6 +245,9 @@ class Server:
         self.attacking_players: List[int] = []  # attacking players' ids
         map_folder = 'maps'
         self.map = TiledMap(path.join(map_folder, 'map_new.tmx'))
+        for wall in self.map.get_objects(apply_func=lambda x: x):
+            entity = Entity(id=None, start_pos=wall[0], end_pos=None)
+            self.walls[entity.id] = entity
 
         logging.debug(f'server listening at: {self.socket.getsockname()}')
 
@@ -387,21 +391,21 @@ class Server:
 
     def collisions_handler(self):
         t = time.time_ns()
-        moving_objs: List[MovingObject] = list(self.players.values()) + list(self.mobs.values()) + list(
+        objs: List[EntityObject] = list(self.players.values()) + list(self.mobs.values()) + list(
             self.projectiles.values())
-        if not moving_objs:
+        if not objs:
             return
-        data = [o.get_pos(t) for o in moving_objs]
+        data = [o.get_pos(t) for o in objs]
         data = data + [wall[0] for wall in self.map.get_objects(apply_func=lambda x: x)]
         kd_tree = KDTree(data)
         collisions = kd_tree.query_pairs(100)
         relevant_collisions = []
         o1, o2 = None, None
         for col in collisions:
-            if col[0] < len(moving_objs):
-                o1 = moving_objs[col[0]]
-            if col[1] < len(moving_objs):
-                o2 = moving_objs[col[1]]
+            if col[0] < len(objs):
+                o1 = objs[col[0]]
+            if col[1] < len(objs):
+                o2 = objs[col[1]]
             if self.handle_collision(o1, o2):
                 relevant_collisions.append([o1.id, o2.id])
         self.attacking_players = []
