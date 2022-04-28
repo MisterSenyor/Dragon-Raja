@@ -134,6 +134,9 @@ class Entity(EntityObject, ABC):
             return self.end_pos
         return round(self.end_pos[0] * p + self.start_pos[0] * (1 - p)), round(
             self.end_pos[1] * p + self.start_pos[1] * (1 - p))
+    
+    def get_speed(self):
+        pass
 
 
 @dataclass
@@ -246,7 +249,7 @@ class Server:
         map_folder = 'maps'
         self.map = TiledMap(path.join(map_folder, 'map_new.tmx'))
         for wall in self.map.get_objects(apply_func=lambda x: x):
-            entity = Entity(id=None, start_pos=wall[0], end_pos=None)
+            entity = Entity(id=None, start_pos=wall[0], end_pos=None, health=1, t0=0)
             self.walls[entity.id] = entity
 
         logging.debug(f'server listening at: {self.socket.getsockname()}')
