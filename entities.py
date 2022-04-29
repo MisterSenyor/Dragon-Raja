@@ -193,7 +193,13 @@ class MainPlayer(Player):
         super(MainPlayer, self).melee_attack()
         if send_update:
             self.client.send_update('attack', {'id': self.id})
-
+            
+    def projectile_attack(self, proj_type, sprite_groups):
+        if self.is_cooldown_over('projectile'):
+            vect = pg.math.Vector2(pg.mouse.get_pos()[0] - WIDTH // 2, pg.mouse.get_pos()[1] - HEIGHT // 2)
+            Projectile(proj_type, self, vect, [sprite_groups["all"], sprite_groups["projectiles"]])
+            self.cooldowns['projectile'] = time.time_ns() + 10 ** 9
+            
     def use_skill(self, skill_id, sprite_groups, inv, send_update=True):
         if self.is_cooldown_over('skill'):
             super(MainPlayer, self).use_skill(skill_id, sprite_groups, inv, send_update=send_update)
@@ -371,20 +377,24 @@ class Dropped(pg.sprite.Sprite):
 
 
 class Inventory:
-    def __init__(self, screen_size, weapon_held='sword'):
-        self.slots = []
-        for i in range(INVENTORY_SIZE):
-            self.slots.append(0)
+    def __init__(self, screen_size, weapon_held=0):
+        self.slots = [0 for _ in range(INVENTORY_SIZE)]
+        self.weapons = ['sword', 'arrow', 'axe']
+        self.weapons_img = [pg.image.load(f"./Graphics/weapons/{w}.png") for w in self.weapons]
+        
         self.image = pg.image.load("Graphics/Inventory.png")
         self.rect = self.image.get_rect()
         self.rect.bottom = screen_size[1]
         self.rect.centerx = screen_size[0] // 2
+        
         self.slot_img = pg.image.load("Graphics/cur_slot.png")
-        self.cur_slot = 0  # current slot
-        self.font = pg.font.Font(pg.font.get_default_font(), 25)
         self.special_slot_img = pg.image.load("Graphics/slot.png")
+        self.cur_slot = 0  # current slot
+        
+        self.font = pg.font.Font(pg.font.get_default_font(), 25)
+        
         self.weapon_held = weapon_held
-        self.weapon_img = pg.image.load("Graphics/weapons/" + weapon_held + ".png")
+        self.weapon_img = self.weapons_img[self.weapon_held]
 
     def render(self, screen):
         # DRAW INVENTORY:
@@ -434,11 +444,10 @@ class Inventory:
         else:
             print("SLOT EMPTY")
 
-    def switch_weapon(self, weapon: str):
+    def switch_weapon(self):
         """ SWITCHES WEAPON HELD AT SPECIAL SLOT"""
-        if self.weapon_held != weapon:
-            self.weapon_img = pg.image.load("Graphics/weapons/" + weapon + ".png")
-            self.weapon_held = weapon
+        self.weapon_held = (self.weapon_held + 1) % len(self.weapons)
+        self.weapon_img = self.weapons_img[self.weapon_held]
         return
 
 

@@ -129,28 +129,9 @@ def update_dir(player: Entity, camera):
 
 
 def handle_keyboard(player: MainPlayer, inv, camera, key, chat, sprite_groups):
-    if key == 120:  # X KEY
-        update_dir(player, camera)
-        player.melee_attack()
-
-    elif key == 122:  # Z key
-        # GET VECTOR FOR PROJECTILE:
-        if player.is_cooldown_over('projectile'):
-            vect = pg.math.Vector2(pg.mouse.get_pos()[0] - WIDTH // 2, pg.mouse.get_pos()[1] - HEIGHT // 2)
-            axe = Projectile("axe", player, vect, [sprite_groups["all"], sprite_groups["projectiles"]])
-            player.cooldowns['projectile'] = time.time_ns() + 10 ** 9
-
-        update_dir(player, camera)
-
-    elif key == 99:  # C KEY
-        # GET VECTOR FOR PROJECTILE:
-        if player.is_cooldown_over('projectile'):
-            vect = pg.math.Vector2(pg.mouse.get_pos()[0] - WIDTH // 2, pg.mouse.get_pos()[1] - HEIGHT // 2)
-            axe = Projectile("arrow", player, vect, [sprite_groups["all"], sprite_groups["projectiles"]])
-            player.cooldowns['projectile'] = time.time_ns() + 10 ** 9
-
-        update_dir(player, camera)
-
+    if key == 122:  # Z key
+        inv.switch_weapon()
+        
     elif key == 114:  # R KEY
         player.use_item(inv, sprite_groups)
 
@@ -195,7 +176,7 @@ def handle_chat(chat, key):
                 logging.error('exception while converting from ascii')
 
 
-def handle_mouse(player, event, inv, camera):
+def handle_mouse(player, event, inv, camera, sprite_groups):
     # CHECK LEFT CLICK:
     if event.button == 1:
         # UPDATE DIRECTION:
@@ -205,16 +186,21 @@ def handle_mouse(player, event, inv, camera):
         mouse = pg.mouse.get_pos()
         player.move(player.rect.centerx + mouse[0] - camera.apply(player).topleft[0],
                     player.rect.centery + mouse[1] - camera.apply(player).topleft[1])
-        return
+   
+    elif event.button == 3:
+        update_dir(player, camera)
+        if inv.weapons[inv.weapon_held] == 'sword':
+            player.melee_attack()
+        else:
+            player.projectile_attack(inv.weapons[inv.weapon_held], sprite_groups)
 
     # CHECK MOUSE SCROLL WHEEL:
-    if event.button > 3:
+    elif event.button > 3:
         if event.button % 2 == 0 and inv.cur_slot < 14:  # SCROLL UP
             inv.cur_slot += 1
         else:  # SCROLL DOWN
             if inv.cur_slot > 0:
                 inv.cur_slot -= 1
-        return
 
 
 def events(player, inv, camera, chat, sprite_groups):
@@ -229,7 +215,7 @@ def events(player, inv, camera, chat, sprite_groups):
         if event.type == pg.KEYDOWN:
             handle_keyboard(player, inv, camera, event.key, chat, sprite_groups)
         if event.type == pg.MOUSEBUTTONDOWN:
-            handle_mouse(player, event, inv, camera)
+            handle_mouse(player, event, inv, camera, sprite_groups)
     return True
 
 
@@ -344,7 +330,7 @@ def run():
     pg.mouse.set_cursor(pg.cursors.broken_x)
 
     running = True
-    inv = Inventory((WIDTH, HEIGHT), "sword")
+    inv = Inventory((WIDTH, HEIGHT))
 
     state = 'LOGIN'
     state, username, password = login_state(screen, clock)
