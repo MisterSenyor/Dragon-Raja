@@ -8,8 +8,7 @@ TCP_PORT = 59000
 
 SERVER_ADDRESS_TCP = (SERVER_IP, TCP_PORT)
 
-DATABASE_PORT = 2212
-DATABASE_NAME = 'dragonRaja'
+DATABASE_NAME = 'dragonraja'
 DATABASE_ERRORS = dict(Connection_Error='Error connecting to database', No_Such_User='Username does not exist',
                        Wrong_Password='Password does not match', Username_Exists='Username already taken',
                        Database_Error='Database malfunction', No_Such_Player='No player exists with this ID')
