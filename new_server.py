@@ -9,7 +9,6 @@ class NewServer(Server):
                  shared_chunks: List[Tuple[int, int]]):
         super(NewServer, self).__init__(sock=sock)
         self.lb_address = lb_address
-        self.lb_fernet = Fernet(b'GdOlkJDG--qPm68eRezrMGmFgnAC5MP3auN8Ts85lkc=')
 
         self.fernets: Dict[bytes, Fernet] = {}  # client public key to fernet
         self.client_public_keys: Dict[Address, bytes] = {}  # client address to public key
@@ -22,6 +21,8 @@ class NewServer(Server):
         logging.debug(f'{self.private_chunks=}')
 
         self.forwarded_updates = []
+        with open("super_secret_do_not_touch.txt", 'rb') as secret_key:
+            self.lb_fernet = Fernet(secret_key.read())
 
     def recv_json(self) -> Tuple[dict, Any]:
         msg, address = self.socket.recvfrom(settings.HEADER_SIZE)

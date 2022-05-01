@@ -149,7 +149,6 @@ def load_private_ecdh_key():
 
 
 def get_pk_and_data(msg: bytes) -> Tuple[bytes, bytes]:
-    print(msg)
     end = b'-----END PUBLIC KEY-----\n'
     pk, data = msg.split(end)
     return pk + end, data
@@ -175,7 +174,6 @@ def client():
     serialized_client_public_key = serialize_public_key(client_private_key.public_key())
 
     encrypted = server(serialized_client_public_key)
-    print(fernet.decrypt(encrypted))
 
 
 def server(serialized_client_public_key):
