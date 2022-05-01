@@ -309,10 +309,10 @@ def run():
             'death': AnimatedSprite('graphics/Knight/KnightDeath_strip.png', 15, True)
         },
         'demon': {
-            'idle': AnimatedSprite('graphics/demon/Idle', 3, False),
-            'run': AnimatedSprite('graphics/demon/Walk', 6, False),
-            'death': AnimatedSprite('graphics/demon/Death', 6, False),
-            'attack': AnimatedSprite('graphics/demon/Attack', 4, False),
+            'idle': AnimatedSprite('graphics/demon_axe_red/ready_', 6, False),
+            'run': AnimatedSprite('graphics/demon_axe_red/run_', 6, False),
+            'death': AnimatedSprite('graphics/demon_axe_red/dead_', 4, False),
+            'attack': AnimatedSprite('graphics/demon_axe_red/attack1_', 6, False), 
         }
     }
 
@@ -354,7 +354,7 @@ def run():
                                     mob_walk_speed=2)
     # SOCK:
     sock_client.connect(username=username)
-    sock_thread = threading.Thread(target=sock_client.receive_updates)
+    sock_thread = threading.Thread(target=sock_client.receive_updates, daemon=True)
     sock_thread.start()
 
     player = sock_client.main_player
@@ -365,7 +365,7 @@ def run():
     client_chat = ChatClient(username)
     client_chat.start()
     chat = Chat(client_chat, username=username)
-    chat_thread = threading.Thread(target=client_chat.receive, args=(chat,))
+    chat_thread = threading.Thread(target=client_chat.receive, args=(chat,), daemon=True)
     chat_thread.start()
 
     # speed_pot = Item("speed_pot", player)
