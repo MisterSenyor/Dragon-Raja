@@ -1,5 +1,4 @@
 import math
-import math
 import random
 import time
 from abc import ABC, abstractmethod
@@ -12,7 +11,6 @@ from scipy.spatial import KDTree
 
 import settings
 from Tilemap import TiledMap
-# from server_chat import chat_server
 from server_chat import *
 from utils import *
 
@@ -30,32 +28,75 @@ def game_ticks_to_ns(game_ticks: int):
     return game_ticks / (10 ** -9) / FPS
 
 
-def check_collisions(direction: tuple, pos_before: tuple, pos_after: tuple, size: tuple, target_pos: tuple,
-                     target_size: tuple) -> tuple:
-    temp = pg.Rect(pos_after, size)
-    hit = pg.Rect(target_pos, target_size)
+def collision_align(pos_before1: tuple, pos_after1: tuple, size1: tuple, pos_before2: tuple, pos_after2: tuple,
+                    size2: tuple) -> Tuple[Tuple[int, int], Tuple[int, int]]:
+    before1 = pg.Rect(pos_before1, size1)
+    after1 = pg.Rect(pos_after1, size1)
+    before2 = pg.Rect(pos_before2, size2)
+    after2 = pg.Rect(pos_after2, size2)
 
-    if direction[0] > 0:
-        if temp.left > hit.right > pos_before[0] + size[0]:
-            temp.move(hit.right - temp.left, 0)
-    elif direction[0] < 0:
-        if temp.right < hit.left and pos_before[0] > hit.right:
-            temp.move(hit.left - temp.right, 0)
+    if after1.colliderect(after2):
+        if after1.x > before1.x:
+            after1.right = before2.left
+        elif after1.x < before1.x:
+            after1.left = before2.right
+        elif after2.x > before2.x:
+            after2.right = before1.left
+        elif after2.x < before2.x:
+            after2.left = before1.right
 
-    # checking Y
-    if direction[1] > 0:
-        if temp.bottom > hit.top > pos_before[1] + size[1]:
-            temp.move(0, hit.top - temp.bottom)
-    elif direction[1] < 0:
-        if temp.top < hit.bottom < pos_before[1]:
-            temp.move(0, hit.bottom - temp.top)
+        if after1.y > before1.y:
+            after1.bottom = before2.top
+        elif after1.y < before1.y:
+            after1.top = before2.bottom
+        elif after2.y > before2.y:
+            after2.bottom = before1.top
+        elif after2.y < before2.y:
+            after2.top = before1.bottom
 
-    return temp.topright
+    return after1.topleft, after2.topleft
+
+    if after.right > hit.left >= before.right:# or hit.left <= before.right <= hit.right:
+        after.right = hit.left
+    elif after.left < hit.right <= before.left:# or hit.left <= before.left <= hit.right:
+        after.left = hit.right
+    if after.top < hit.bottom <= before.top:# or hit.top <= before.top <= hit.bottom:
+        after.top = hit.bottom
+    elif after.bottom > hit.top >= before.bottom:# or hit.top <= before.bottom <= hit.bottom:
+        after.bottom = hit.top
+
+    return after.topleft
+
+
+def get_collision_data(o1, o2):
+    if not isinstance(o1, Entity) and not isinstance(o2, Entity):
+        return {}
+    if not isinstance(o1, Entity):
+        return get_collision_data(o2, o1)
+
+    id2 = o2.id if isinstance(o2, (Entity, Projectile)) else None
+    result = {'id1': o1.id, 'id2': id2, 'aligned1': None, 'aligned2': None}
+
+    t = time.time_ns()
+    t2 = t + game_ticks_to_ns(10)
+    pos_after1, pos_after2 = o1.get_pos(t2), o2.get_pos(t2)
+    aligned1, aligned2 = collision_align(pos_before1=o1.get_pos(t), pos_before2=o2.get_pos(t), pos_after1=pos_after1,
+                                         pos_after2=pos_after2, size1=o1.get_size(), size2=o2.get_size())
+    if tuple(aligned1) != tuple(pos_after1):
+        o1.end_pos = aligned1
+        result['aligned1'] = aligned1
+    if tuple(aligned2) != tuple(pos_after2):
+        o2.end_pos = aligned2
+        result['aligned2'] = aligned2
+
+    if result['aligned1'] is not None or result['aligned2'] is not None:
+        return result
+    return {}
 
 
 class MyJSONEncoder(json.JSONEncoder):
     def default(self, o):
-        if isinstance(o, EntityObject):
+        if isinstance(o, MovingObject):
             t = time.time_ns()
             data = o.__dict__.copy()
             del data['t0']
@@ -87,8 +128,34 @@ class Dropped:
     pos: Tuple[int, int]
 
 
+class Hitbox(ABC):
+    @abstractmethod
+    def get_size(self):
+        pass
+
+    @abstractmethod
+    def get_pos(self, t=None):
+        return None
+
+
 @dataclass
-class EntityObject(ABC):
+class Wall(Hitbox):
+    size: Tuple[int, int]
+    pos: Tuple[int, int]
+
+    def __post_init__(self):
+        self.size = round(self.size[0]), round(self.size[1])
+        self.pos = round(self.pos[0]), round(self.pos[1])
+
+    def get_size(self):
+        return self.size
+
+    def get_pos(self, t=None):
+        return self.pos
+
+
+@dataclass
+class MovingObject(Hitbox):
     id: Optional[int]
     start_pos: Tuple[int, int]
     t0: int
@@ -98,16 +165,12 @@ class EntityObject(ABC):
             self.id = generate_id()
 
     @abstractmethod
-    def get_pos(self, t: int = None):
-        pass
-
-    @abstractmethod
     def get_speed(self):
         pass
 
 
 @dataclass
-class Entity(EntityObject, ABC):
+class Entity(MovingObject, ABC):
     end_pos: Optional[Tuple[int, int]]
     health: int
 
@@ -134,9 +197,6 @@ class Entity(EntityObject, ABC):
             return self.end_pos
         return round(self.end_pos[0] * p + self.start_pos[0] * (1 - p)), round(
             self.end_pos[1] * p + self.start_pos[1] * (1 - p))
-    
-    def get_speed(self):
-        pass
 
 
 @dataclass
@@ -184,6 +244,9 @@ class Player(Entity):
         self.check_effects()
         return 5 + sum([3 for x in self.effects if x.type == 'speed_pot'])
 
+    def get_size(self):
+        return PLAYER_SIZE
+
 
 # used for encoding items
 class MainPlayer(Player):
@@ -191,7 +254,7 @@ class MainPlayer(Player):
 
 
 @dataclass
-class Projectile(EntityObject):
+class Projectile(MovingObject):
     target: Tuple[int, int]
     type: str
     attacker_id: int
@@ -210,6 +273,9 @@ class Projectile(EntityObject):
     def get_damage(self):
         return 20
 
+    def get_size(self):
+        return PROJECTILE_SIZE
+
 
 @dataclass
 class Mob(Entity):
@@ -217,6 +283,9 @@ class Mob(Entity):
 
     def get_speed(self):
         return 2
+
+    def get_size(self):
+        return MOB_SIZE
 
 
 def generate_id(max_n=100000):
@@ -240,17 +309,17 @@ class Server:
 
         self.players: Dict[int, Player] = {}
         self.mobs: Dict[int, Mob] = {}
-        self.walls: Dict[int, Entity] = {}
+        self.walls: List[Wall] = []
 
         self.projectiles: Dict[int, Projectile] = {}
         self.dropped: Dict[str, Dropped] = {}
         self.updates = []
-        self.attacking_players: List[int] = []  # attacking players' ids
+        self.attacking_players: List[int] = []  # attacking players' ids\
+
         map_folder = 'maps'
         self.map = TiledMap(path.join(map_folder, 'map_new.tmx'))
         for wall in self.map.get_objects(apply_func=lambda x: x):
-            entity = Entity(id=None, start_pos=wall[0], end_pos=None, health=1, t0=0)
-            self.walls[entity.id] = entity
+            self.walls.append(Wall(size=wall[1], pos=wall[0]))
 
         logging.debug(f'server listening at: {self.socket.getsockname()}')
 
@@ -347,7 +416,24 @@ class Server:
             self.updates.append({'cmd': 'entity_died', 'id': entity.id, 'drops': drops})
             logging.debug(f'entity died: {entity=}')
 
-    def handle_collision(self, o1, o2) -> bool:
+    def handle_collision(self, collision_data):
+        id1, id2 = collision_data['id1'], collision_data['id2']
+        o1, o2 = None, None
+        if id1 in self.players:
+            o1 = self.players[id1]
+        elif id1 in self.mobs:
+            o1 = self.mobs[id1]
+        if id2 in self.players:
+            o2 = self.players[id2]
+        elif id2 in self.mobs:
+            o2 = self.mobs[id2]
+
+        if o1 is not None and collision_data['aligned1'] is not None:
+            o1.end_pos = collision_data['aligned1']
+        if o2 is not None and collision_data['aligned2'] is not None:
+            o2.end_pos = collision_data['aligned2']
+
+        return
         result = False
         if isinstance(o1, Projectile) and isinstance(o2, Entity):
             result = self.handle_collision(o2, o1)
@@ -369,8 +455,7 @@ class Server:
                 result = True
                 self.deal_damage(o1, o2.get_damage())
 
-        if not isinstance(o1, Entity):
-            result = self.handle_collision(o2, o1)
+
 
         if isinstance(o1, Player):
             size1 = PLAYER_SIZE
@@ -381,39 +466,28 @@ class Server:
         elif isinstance(o2, Mob):
             size2 = MOB_SIZE
 
-        t = time.time_ns()
-        if isinstance(o1, Entity):
-            curr_pos = o1.get_pos(t)
-            game_tick = (10 ** 9) / FPS  # in ns
-            next_pos = o1.get_pos(t + game_tick)
-            collision_pos = check_collisions(direction, curr_pos, next_pos, size1, o2[0], o2[1])
-            if collision_pos != next_pos:
-                o1.end_pos = collision_pos
-                result = True
+
         return result
 
     def collisions_handler(self):
         t = time.time_ns()
-        objs: List[EntityObject] = list(self.players.values()) + list(self.mobs.values()) + list(
-            self.projectiles.values())
-        if not objs:
-            return
-        data = [o.get_pos(t) for o in objs]
-        data = data + [wall[0] for wall in self.map.get_objects(apply_func=lambda x: x)]
-        kd_tree = KDTree(data)
+        hitboxes: List[Hitbox] = list(self.players.values()) + list(self.mobs.values()) + list(
+            self.projectiles.values()) + self.walls
+
+        positions = [hitbox.get_pos(t) for hitbox in hitboxes]
+        kd_tree = KDTree(positions)
         collisions = kd_tree.query_pairs(100)
-        relevant_collisions = []
-        o1, o2 = None, None
+
+        collisions_data = []
         for col in collisions:
-            if col[0] < len(objs):
-                o1 = objs[col[0]]
-            if col[1] < len(objs):
-                o2 = objs[col[1]]
-            if self.handle_collision(o1, o2):
-                relevant_collisions.append([o1.id, o2.id])
+            o1, o2 = hitboxes[col[0]], hitboxes[col[1]]
+            collision_data = get_collision_data(o1, o2)
+            if collision_data:
+                collisions_data.append(collision_data)
+                # self.handle_collision(collision_data)
         self.attacking_players = []
-        if relevant_collisions:
-            self.updates.append({'cmd': 'collisions', 'collisions': relevant_collisions})
+        if collisions_data:
+            self.updates.append({'cmd': 'collisions', 'collisions_data': collisions_data})
 
     def handle_update(self, data, address):
         cmd = data['cmd']
@@ -523,7 +597,7 @@ def main():
     sock.bind(settings.SERVER_ADDRESS)
 
     server = Server(sock=sock)
-    server.generate_mobs(20)
+    server.generate_mobs(settings.MOB_COUNT)
     receive_thread = threading.Thread(target=server.receive_packets)
     receive_thread.start()
     # INITIALIZE CHAT SERVER:
