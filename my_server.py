@@ -509,7 +509,7 @@ class Server:
         if settings.ENABLE_SHADOWS:
             self.updates.append({
                 'cmd': 'shadows',
-                'players': [{'id': player.id, 'pos': player.get_pos()} for player in self.players.values()]
+                'entities': [{'id': entity.id, 'pos': entity.get_pos()} for entity in list(self.players.values()) + list(self.mobs.values())]
             })
         data = json.dumps({'cmd': 'update', 'updates': self.updates}, cls=MyJSONEncoder).encode() + b'\n'
         self.updates.clear()

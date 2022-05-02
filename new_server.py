@@ -57,7 +57,7 @@ class NewServer(Server):
         elif mob.type == 'demon' and self.players:
             player = random.choice(list(self.players.values()))
             player_pos = player.get_pos()
-            if get_chunk(mob.get_pos()) in self.private_chunks:
+            if get_chunk(player_pos) in self.private_chunks:
                 mob.move(pos=player_pos)
                 self.updates.append({'cmd': 'move', 'pos': player_pos, 'id': mob.id})
 
@@ -133,11 +133,10 @@ class NewServer(Server):
         while True:
             try:
                 data, address = self.recv_json()
+                logging.debug(f'received data: {data=}, {address=}')
                 if address == self.lb_address:
                     self.handle_lb_update(data=data, address=address)
                 elif address in self.client_public_keys:
-                    data, address = self.recv_json()
-                    logging.debug(f'received data: {data=}, {address=}')
                     # forward update to lb
                     self.handle_client_update(data=data, address=address)
                 else:
@@ -191,7 +190,7 @@ class NewServer(Server):
         if settings.ENABLE_SHADOWS:
             self.updates.append({
                 'cmd': 'shadows',
-                'players': [{'id': player.id, 'pos': player.get_pos()} for player in self.players.values()]
+                'entities': [{'id': entity.id, 'pos': entity.get_pos()} for entity in list(self.players.values()) + list(self.mobs.values())]
             })
         data = json.dumps({'cmd': 'update', 'updates': self.updates}, cls=MyJSONEncoder).encode() + b'\n'
         self.updates.clear()

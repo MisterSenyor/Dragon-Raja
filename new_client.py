@@ -1,3 +1,5 @@
+import logging
+
 from client import *
 
 
@@ -12,14 +14,6 @@ class NewClient(Client):
     def get_data(self, data):
         try:
             assert data['cmd'] == 'get_data'
-            # delete unnecessary sprites
-            ids = [o['id'] for o in data['players'] + data['mobs']] + [o['item_id'] for o in data['dropped']]
-            for sprite in self.sprite_groups['entity'].sprites():
-                if sprite.id not in ids:
-                    sprite.kill()
-            for sprite in self.sprite_groups['dropped'].sprites():
-                if sprite.item_id not in ids:
-                    sprite.kill()
             # add new sprites
             ids = [o.id for o in self.sprite_groups['entity'].sprites()] + \
                   [o.item_id for o in self.sprite_groups['dropped'].sprites()]
@@ -61,14 +55,16 @@ class NewClient(Client):
                 elif address == self.server:
                     if cmd == 'update':
                         updates = data['updates']
-                        if updates:
-                            logging.debug(f'received updates: {updates=}')
+                        non_shadow_updates = [u for u in updates if u["cmd"] != "shadows"]
+                        if non_shadow_updates:
+                            logging.debug(f'received updates: {non_shadow_updates}')
                         for update in updates:
                             try:
                                 self.handle_update(update)
                             except Exception:
                                 logging.exception('exception in update')
                     elif cmd == 'get_data':
+                        logging.debug(f'received data: {data=}')
                         self.get_data(data)
                 else:
                     logging.warning(f'received json from an unknown source: {data=}, {address=}')
