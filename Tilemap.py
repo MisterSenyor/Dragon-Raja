@@ -2,6 +2,7 @@ import pygame as pg
 import pytmx
 from settings import *
 
+
 class Map:
     def __init__(self, filename):
         self.data = []

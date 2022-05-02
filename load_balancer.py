@@ -13,12 +13,13 @@ class LoadBalancer:
         self.clients = {}  # id to client address
         self.player_chunks: Dict[int, Tuple[int, int]] = {}  # id to chunk
 
-        self.lb_fernet = Fernet(b'GdOlkJDG--qPm68eRezrMGmFgnAC5MP3auN8Ts85lkc=')
         self.fernets: Dict[bytes, Fernet] = {}  # client pk to fernet
         self.client_public_keys: Dict[Address, bytes] = {}  # client address to public key
         self.lb_private_key = load_private_ecdh_key()
 
         self.chunk_mapping = generate_chunk_mapping()
+        with open("super_secret_do_not_touch.txt", 'rb') as secret_key:
+            self.lb_fernet = Fernet(secret_key.read())
 
     def get_server(self, chunk_idx: Tuple[int, int]):
         return self.servers[self.chunk_mapping[chunk_idx[0]][chunk_idx[1]]]
