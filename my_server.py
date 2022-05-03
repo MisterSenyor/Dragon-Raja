@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from os import path
 from typing import List, Optional
 
+import pygame
 import pygame as pg
 from scipy.spatial import KDTree
 
@@ -36,36 +37,41 @@ def collision_align(pos_before1: tuple, pos_after1: tuple, size1: tuple, pos_bef
     after2 = pg.Rect(pos_after2, size2)
 
     if after1.colliderect(after2):
+        if before1 == after1 and before2 != after2:
+            aligned2, aligned1 = collision_align(pos_before1=pos_before2, pos_after1=pos_after2, size1=size2,
+                                                 pos_before2=pos_before1, pos_after2=pos_after1, size2=size1)
+            return aligned1, aligned2
+        if before1 == after1:
+            after1.x += 1
+
+        m, n = None, None
+        if after1.x != before1.x:
+            m = (after1.y - before1.y) / (after1.x - before1.x)
+            n = before1.y - m * before1.x
+
         if after1.x > before1.x:
             after1.right = before2.left
         elif after1.x < before1.x:
             after1.left = before2.right
-        elif after2.x > before2.x:
-            after2.right = before1.left
-        elif after2.x < before2.x:
-            after2.left = before1.right
 
         if after1.y > before1.y:
             after1.bottom = before2.top
         elif after1.y < before1.y:
             after1.top = before2.bottom
-        elif after2.y > before2.y:
-            after2.bottom = before1.top
-        elif after2.y < before2.y:
-            after2.top = before1.bottom
 
+        if m is None or m == 0:
+            return after1.topleft, after2.topleft
+
+        y1 = round(m * after1.x + n)
+        x2 = round((after1.y - n) / m)
+
+        tmp1 = pygame.Vector2(after1.x, y1)
+        tmp2 = pygame.Vector2(x2, after1.y)
+
+        if pygame.Vector2(tmp1).distance_squared_to(before1.topleft) < pygame.Vector2(tmp2).distance_squared_to(before1.topleft):
+            return (after1.x, y1), after2.topleft
+        return (x2, after1.y), after2.topleft
     return after1.topleft, after2.topleft
-
-    if after.right > hit.left >= before.right:# or hit.left <= before.right <= hit.right:
-        after.right = hit.left
-    elif after.left < hit.right <= before.left:# or hit.left <= before.left <= hit.right:
-        after.left = hit.right
-    if after.top < hit.bottom <= before.top:# or hit.top <= before.top <= hit.bottom:
-        after.top = hit.bottom
-    elif after.bottom > hit.top >= before.bottom:# or hit.top <= before.bottom <= hit.bottom:
-        after.bottom = hit.top
-
-    return after.topleft
 
 
 def get_collision_data(o1, o2):
