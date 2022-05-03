@@ -118,6 +118,19 @@ class Client:
         ids = [sprite.id for sprite in sprites]
         return sprites[ids.index(id_)]
 
+    def handle_collision(self, collision_data):
+        id1, id2 = collision_data['id1'], collision_data['id2']
+        o1, o2 = None, None
+        if id1 is not None:
+            o1 = self.get_entity_by_id(id1)
+        if id2 is not None:
+            o2 = self.get_entity_by_id(id2)
+
+        if o1 is not None and collision_data['aligned1'] is not None:
+            o1.move(*collision_data['aligned1'], send_update=False)
+        if o2 is not None and collision_data['aligned2'] is not None:
+            o2.move(*collision_data['aligned2'], send_update=False)
+
     def handle_update(self, update: dict):
         cmd = update['cmd']
         player_ids = [player.id for player in self.sprite_groups['players'].sprites()]
@@ -127,7 +140,8 @@ class Client:
         elif cmd == 'projectile' and update['id'] != self.main_player.id:
             self.create_projectile(update['projectile'])
         elif cmd == 'collisions':
-            pass
+            for collision_data in update['collisions_data']:
+                self.handle_collision(collision_data)
         elif cmd == 'item_dropped':
             self.create_dropped(update)
         elif cmd == 'item_picked':
