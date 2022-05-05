@@ -74,32 +74,6 @@ def collision_align(pos_before1: tuple, pos_after1: tuple, size1: tuple, pos_bef
     return after1.topleft, after2.topleft
 
 
-def get_collision_data(o1, o2):
-    if not isinstance(o1, Entity) and not isinstance(o2, Entity):
-        return {}
-    if not isinstance(o1, Entity):
-        return get_collision_data(o2, o1)
-
-    id2 = o2.id if isinstance(o2, (Entity, Projectile)) else None
-    result = {'id1': o1.id, 'id2': id2, 'aligned1': None, 'aligned2': None}
-
-    t = time.time_ns()
-    t2 = t + game_ticks_to_ns(10)
-    pos_after1, pos_after2 = o1.get_pos(t2), o2.get_pos(t2)
-    aligned1, aligned2 = collision_align(pos_before1=o1.get_pos(t), pos_before2=o2.get_pos(t), pos_after1=pos_after1,
-                                         pos_after2=pos_after2, size1=o1.get_size(), size2=o2.get_size())
-    if tuple(aligned1) != tuple(pos_after1):
-        o1.end_pos = aligned1
-        result['aligned1'] = aligned1
-    if tuple(aligned2) != tuple(pos_after2):
-        o2.end_pos = aligned2
-        result['aligned2'] = aligned2
-
-    if result['aligned1'] is not None or result['aligned2'] is not None:
-        return result
-    return {}
-
-
 class MyJSONEncoder(json.JSONEncoder):
     def default(self, o):
         if isinstance(o, MovingObject):
@@ -320,7 +294,7 @@ class Server:
         self.projectiles: Dict[int, Projectile] = {}
         self.dropped: Dict[str, Dropped] = {}
         self.updates = []
-        self.attacking_players: List[int] = []  # attacking players' ids\
+        self.attacking_players: List[int] = []  # attacking players' ids
 
         map_folder = 'maps'
         self.map = TiledMap(path.join(map_folder, 'map_new.tmx'))
@@ -422,6 +396,43 @@ class Server:
             self.updates.append({'cmd': 'entity_died', 'id': entity.id, 'drops': drops})
             logging.debug(f'entity died: {entity=}')
 
+    def get_collision_data(self, o1, o2):
+        if not isinstance(o1, Entity) and not isinstance(o2, Entity):
+            return {}
+        if not isinstance(o1, Entity):
+            return self.get_collision_data(o2, o1)
+
+        id2 = o2.id if isinstance(o2, (Entity, Projectile)) else None
+        result = {'id1': o1.id, 'id2': id2, 'aligned1': None, 'aligned2': None, 'damage1': None, 'damage2': None}
+
+        if isinstance(o2, Projectile):
+            result['damage1'] = o2.get_damage()
+            return result
+
+        collision = False
+        t = time.time_ns()
+        t2 = t + game_ticks_to_ns(10)
+        pos_after1, pos_after2 = o1.get_pos(t2), o2.get_pos(t2)
+        aligned1, aligned2 = collision_align(pos_before1=o1.get_pos(t), pos_before2=o2.get_pos(t),
+                                             pos_after1=pos_after1,
+                                             pos_after2=pos_after2, size1=o1.get_size(), size2=o2.get_size())
+        if tuple(aligned1) != tuple(pos_after1):
+            o1.end_pos = aligned1
+            result['aligned1'] = aligned1
+            collision = True
+        if tuple(aligned2) != tuple(pos_after2):
+            o2.end_pos = aligned2
+            result['aligned2'] = aligned2
+            collision = True
+
+        if collision:
+            if isinstance(o2, Entity) and isinstance(o1, Player) and o1.id in self.attacking_players:
+                result['damage2'] = o1.get_damage()
+            if isinstance(o2, Player) and o2.id in self.attacking_players:
+                result['damage1'] = o2.get_damage()
+            return result
+        return {}
+
     def handle_collision(self, collision_data):
         id1, id2 = collision_data['id1'], collision_data['id2']
         o1, o2 = None, None
@@ -439,19 +450,23 @@ class Server:
         if o2 is not None and collision_data['aligned2'] is not None:
             o2.end_pos = collision_data['aligned2']
 
+        if o1 is not None and o2 is not None:
+            logging.debug(f'handling collision: {o1=}, {o2=}')
+            if isinstance(o1, Entity) and isinstance(o2, Projectile):
+                entity, proj = o1, o2
+                if proj.attacker_id != entity.id:
+                    logging.debug(f'entity-projectile collision: {entity=}, {proj=}')
+                    logging.debug(f'{entity.get_pos()=}, {proj.get_pos()=}')
+                    if proj.id in self.projectiles:
+                        del self.projectiles[proj.id]
+                    self.deal_damage(entity, proj.get_damage())
+
+        self.attacking_players = []
         return
-        result = False
         if isinstance(o1, Projectile) and isinstance(o2, Entity):
             result = self.handle_collision(o2, o1)
         if isinstance(o1, Entity) and isinstance(o2, Projectile):
-            entity, proj = o1, o2
-            if proj.attacker_id != entity.id:
-                result = True
-                logging.debug(f'entity-projectile collision: {entity=}, {proj=}')
-                logging.debug(f'{entity.get_pos()=}, {proj.get_pos()=}')
-                if proj.id in self.projectiles:
-                    del self.projectiles[proj.id]
-                self.deal_damage(entity, proj.get_damage())
+            pass
         if isinstance(o1, Player) and isinstance(o2, Entity):
             if o1.id in self.attacking_players:
                 result = True
@@ -487,10 +502,10 @@ class Server:
         collisions_data = []
         for col in collisions:
             o1, o2 = hitboxes[col[0]], hitboxes[col[1]]
-            collision_data = get_collision_data(o1, o2)
+            collision_data = self.get_collision_data(o1, o2)
             if collision_data:
                 collisions_data.append(collision_data)
-                # self.handle_collision(collision_data)
+                self.handle_collision(collision_data)
         self.attacking_players = []
         if collisions_data:
             self.updates.append({'cmd': 'collisions', 'collisions_data': collisions_data})
