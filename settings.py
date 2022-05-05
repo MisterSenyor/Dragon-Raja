@@ -9,9 +9,6 @@ TCP_PORT = 59000
 SERVER_ADDRESS_TCP = (SERVER_IP, TCP_PORT)
 
 DATABASE_NAME = 'dragonraja'
-DATABASE_ERRORS = dict(Connection_Error='Error connecting to database', No_Such_User='Username does not exist',
-                       Wrong_Password='Password does not match', Username_Exists='Username already taken',
-                       Database_Error='Database malfunction', No_Such_Player='No player exists with this ID')
 
 USERS_FILE = r'data\Users.txt'
 PLAYERS_FILE = r'data\Players.txt'
@@ -33,6 +30,7 @@ CHUNK_SIZE = 500
 LB_ADDRESS = ('127.0.0.1', 13579)
 MULTIPLE_SERVERS = True
 ENABLE_SHADOWS = False
+MOB_COUNT = 10
 
 MAP_SIZE = (10000, 5000)  # change to real value
 CHUNKS_X, CHUNKS_Y = MAP_SIZE[0] // CHUNK_SIZE, MAP_SIZE[1] // CHUNK_SIZE
@@ -44,7 +42,7 @@ username_lim = 20  # username character limit
 
 INVENTORY_SIZE = 15
 
-PLAYER_SIZE = 50
-MOB_SIZE = 100
-PROJECTILE_SIZE = 30
+PLAYER_SIZE = [80, 60]
+MOB_SIZE = [80, 60]
+PROJECTILE_SIZE = [40, 40]
 chat_start_seed = "Barak_Gonen"
