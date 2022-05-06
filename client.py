@@ -72,10 +72,16 @@ class Client:
                                   walk_speed=self.mob_walk_speed, anim_speed=self.mob_anim_speed,
                                   animations=self.mob_animations[data['type']])
 
+    def send_projectile(self, vect, proj_type):
+        self.send_update(
+            'projectile',
+            {'id': self.main_player.id,
+             'projectile': {'target': list(vect), 'type': proj_type, 'attacker_id': self.main_player.id}})
+
     def create_projectile(self, data):
         entities.Projectile(proj_type=data['type'], attacker=self.get_entity_by_id(data['attacker_id']),
                             sprite_groups=self.projectile_sprite_groups, vect=pygame.Vector2(data['target']),
-                            send_update=False)
+                            id_=data['id'])
 
     def create_dropped(self, data):
         entities.Dropped(item_type=data['item_type'], pos=data['pos'], sprite_groups=self.dropped_sprite_groups,
@@ -103,20 +109,49 @@ class Client:
         except Exception:
             logging.exception(f'exception in init')
 
+    def get_projectile_by_id(self, id_: int):
+        sprites = self.sprite_groups['projectiles'].sprites()
+        ids = [sprite.id for sprite in sprites]
+        return sprites[ids.index(id_)] if id_ in ids else None
+
     def get_entity_by_id(self, id_: int):
         sprites = self.sprite_groups['entity'].sprites()
         ids = [sprite.id for sprite in sprites]
-        return sprites[ids.index(id_)]
+        return sprites[ids.index(id_)] if id_ in ids else None
 
     def get_dropped_by_id(self, id_: int):
         sprites = self.sprite_groups['dropped'].sprites()
         ids = [sprite.item_id for sprite in sprites]
-        return sprites[ids.index(id_)]
+        return sprites[ids.index(id_)] if id_ in ids else None
 
     def get_shadow_by_id(self, id_: int):
         sprites = self.sprite_groups['shadows'].sprites()
         ids = [sprite.id for sprite in sprites]
-        return sprites[ids.index(id_)]
+        return sprites[ids.index(id_)] if id_ in ids else None
+
+    def handle_collision(self, collision_data):
+        id1, id2 = collision_data['id1'], collision_data['id2']
+        o1, o2 = None, None
+        if id1 is not None:
+            o1 = self.get_entity_by_id(id1)
+            if o1 is None:
+                o1 = self.get_projectile_by_id(id1)
+        if id2 is not None:
+            o2 = self.get_entity_by_id(id2)
+            if o2 is None:
+                o2 = self.get_projectile_by_id(id2)
+
+        if o1 is not None and collision_data['aligned1'] is not None:
+            o1.move(*collision_data['aligned1'], send_update=False)
+        if o2 is not None and collision_data['aligned2'] is not None:
+            o2.move(*collision_data['aligned2'], send_update=False)
+
+        if o1 is not None and isinstance(o1, entities.Entity):
+            o1.health -= collision_data['damage1']
+        if o2 is not None and isinstance(o2, entities.Entity):
+            o2.health -= collision_data['damage2']
+        elif o2 is not None and isinstance(o2, entities.Projectile):
+            o2.kill()
 
     def handle_update(self, update: dict):
         cmd = update['cmd']
@@ -124,10 +159,11 @@ class Client:
         if cmd == 'player_enters':
             if update['player']['id'] not in player_ids:
                 self.create_player(update['player'])
-        elif cmd == 'projectile' and update['id'] != self.main_player.id:
+        elif cmd == 'projectile':
             self.create_projectile(update['projectile'])
         elif cmd == 'collisions':
-            pass
+            for collision_data in update['collisions_data']:
+                self.handle_collision(collision_data)
         elif cmd == 'item_dropped':
             self.create_dropped(update)
         elif cmd == 'item_picked':
@@ -138,14 +174,14 @@ class Client:
             item = entities.Item(item_type=update['item_type'], owner=entity)
             item.use_item(send_update=False)
         elif cmd == 'entity_died':
-            # entity = self.get_entity_by_id(update['id'])
-            # entity.kill()
+            entity = self.get_entity_by_id(update['id'])
+            entity.handle_death()
             for drop_data in update['drops']:
                 self.create_dropped(drop_data)
         elif cmd == 'use_skill':
             entity = self.get_entity_by_id(update['id'])
             entity.use_skill(skill_id=update['skill_id'], sprite_groups=self.sprite_groups, inv=None,
-                             send_update=False)
+                             extra=update['extra'])
         elif ENABLE_SHADOWS and cmd == 'shadows':
             for entity in update['entities']:
                 shadow = self.get_shadow_by_id(entity['id'] + 1)

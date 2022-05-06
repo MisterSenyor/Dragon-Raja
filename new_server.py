@@ -224,13 +224,13 @@ def main():
     logging.debug(f'{len(shared_chunks)=}, {len(server_chunks)=}')
 
     server = NewServer(sock=sock, lb_address=LB_ADDRESS, shared_chunks=shared_chunks, server_chunks=server_chunks)
-    server.generate_mobs(20)
+    server.generate_mobs(MOB_COUNT)
     receive_thread = threading.Thread(target=server.receive_packets)
     receive_thread.start()
 
     while True:
         time.sleep(settings.UPDATE_TICK)
-        # server.collisions_handler()
+        server.collisions_handler()
         server.send_updates()
         server.update_mobs()
         server.forward_updates()

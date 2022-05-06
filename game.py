@@ -136,13 +136,13 @@ def handle_keyboard(player: MainPlayer, inv, camera, key, chat, sprite_groups):
         player.use_item(inv, sprite_groups)
 
     elif key == 103:  # G KEY
-        player.use_skill(1, sprite_groups, inv)
+        player.send_use_skill(1)
 
     elif key == 104:  # H KEY
-        player.use_skill(2, sprite_groups, inv)
+        player.send_use_skill(2)
 
     elif key == 106:  # J KEY
-        player.use_skill(3, sprite_groups, inv)
+        player.send_use_skill(3)
 
     elif key == 113:  # Q KEY
         player.drop_item(inv, sprite_groups)
@@ -192,7 +192,7 @@ def handle_mouse(player, event, inv, camera, sprite_groups):
         if inv.weapons[inv.weapon_held] == 'sword':
             player.melee_attack()
         else:
-            player.projectile_attack(inv.weapons[inv.weapon_held], sprite_groups)
+            player.projectile_attack(inv.weapons[inv.weapon_held])
 
     # CHECK MOUSE SCROLL WHEEL:
     elif event.button > 3:
@@ -271,7 +271,7 @@ def login_state(screen, clock):
     username = text_boxes[0].text
     password = text_boxes[1].text
     pg.event.clear()
-    return state, username, text_boxes
+    return state, username, password
 
 
 def run():
@@ -353,7 +353,9 @@ def run():
                                     player_anim_speed=5, player_walk_speed=5, mob_anim_speed=15,
                                     mob_walk_speed=2)
     # SOCK:
-    sock_client.connect(username=username)
+    if not sock_client.connect(username=username, password=password):
+        raise Exception()
+
     sock_thread = threading.Thread(target=sock_client.receive_updates, daemon=True)
     sock_thread.start()
 
