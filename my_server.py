@@ -432,6 +432,9 @@ class Server:
                 result['damage2'] = o1.get_damage()
             if o2.id in self.attacking_entities:
                 result['damage1'] = o2.get_damage()
+
+        if result['aligned1'] is not None or result['aligned2'] is not None or result['damage1'] > 0 or \
+                result['damage2'] > 0:
             return result
         return {}
 
