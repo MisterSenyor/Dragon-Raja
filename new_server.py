@@ -25,7 +25,12 @@ class NewServer(Server):
             self.lb_fernet = Fernet(secret_key.read())
 
     def recv_json(self) -> Tuple[dict, Any]:
-        msg, address = self.socket.recvfrom(settings.HEADER_SIZE)
+        while True:
+            try:
+                msg, address = self.socket.recvfrom(settings.HEADER_SIZE)
+                break
+            except ConnectionResetError:
+                pass
         if address == self.lb_address:
             data = self.lb_fernet.decrypt(msg)
             return json.loads(data), address
@@ -105,14 +110,15 @@ class NewServer(Server):
         if data['id'] in self.players:
             del self.players[data['id']]
 
-    def handle_update(self, data, address):
+    def handle_lb_update(self, data, address):
         cmd = data['cmd']
         if cmd == 'player_enters':
             self.add_player(data)
         elif cmd == 'player_leaves':
             self.remove_player(data)
         else:
-            super(NewServer, self).handle_update(data=data, address=address)
+            # handle update without forwarding to lb
+            self.handle_update(data=data, address=address)
 
     def remove_client(self, address):
         if address in self.client_public_keys:
@@ -126,7 +132,7 @@ class NewServer(Server):
             del self.fernets[self.client_public_keys[address]]
             del self.client_public_keys[address]
 
-    def handle_lb_update(self, data, address):
+    def handle_lb_request(self, data, address):
         cmd = data['cmd']
         if cmd == "connect":
             self.connect(data=data, address=address)
@@ -137,7 +143,7 @@ class NewServer(Server):
         elif cmd == 'update':
             # send updates to clients
             for update in data['updates']:
-                self.handle_update(data=update, address=address)
+                self.handle_lb_update(data=update, address=address)
 
     def receive_packets(self):
         while True:
@@ -145,17 +151,17 @@ class NewServer(Server):
                 data, address = self.recv_json()
                 logging.debug(f'received data: {data=}, {address=}')
                 if address == self.lb_address:
-                    self.handle_lb_update(data=data, address=address)
+                    self.handle_lb_request(data=data, address=address)
                 elif address in self.client_public_keys:
                     # forward update to lb
-                    self.handle_client_update(data=data, address=address)
+                    self.handle_and_forward_update(data=data, address=address)
                 else:
                     logging.warning(
                         f'address not in clients or lb: {address=}, {self.client_public_keys=}, {self.lb_address=}')
             except Exception:
                 logging.exception('exception while handling request')
 
-    def handle_client_update(self, data, address):
+    def handle_and_forward_update(self, data, address):
         cmd = data['cmd']
         if cmd not in ['move', 'attack', 'projectile', 'disconnect', 'item_dropped', 'item_picked',
                        'use_item', 'use_skill']:
