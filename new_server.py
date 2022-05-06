@@ -114,6 +114,18 @@ class NewServer(Server):
         else:
             super(NewServer, self).handle_update(data=data, address=address)
 
+    def remove_client(self, address):
+        if address in self.client_public_keys:
+            json_data = {
+                'cmd': 'remove_data',
+                'entities': [entity.id for entity in list(self.players.values()) + list(self.mobs.values()) if
+                             get_chunk(entity.get_pos()) in self.private_chunks]
+            }
+            data = json.dumps(json_data, cls=MyJSONEncoder).encode() + b'\n'
+            send_all(self.socket, data, address, self.fernets[self.client_public_keys[address]])
+            del self.fernets[self.client_public_keys[address]]
+            del self.client_public_keys[address]
+
     def handle_lb_update(self, data, address):
         cmd = data['cmd']
         if cmd == "connect":
@@ -121,10 +133,7 @@ class NewServer(Server):
         elif cmd == 'add_client':
             self.add_client(self.players[data['id']], data['client'], data['client_key'], init=False)
         elif cmd == 'remove_client':
-            if tuple(data['client']) in self.client_public_keys:
-                client = tuple(data['client'])
-                del self.fernets[self.client_public_keys[client]]
-                del self.client_public_keys[client]
+            self.remove_client(tuple(data['client']))
         elif cmd == 'update':
             # send updates to clients
             for update in data['updates']:

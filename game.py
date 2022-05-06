@@ -1,9 +1,6 @@
-import logging
-import sys
-import threading
 from os import path
-from random import randint, choice
 
+from typing import Optional
 import client
 import new_client
 from Tilemap import *
@@ -16,41 +13,28 @@ pg.init()
 
 
 class Button(pg.sprite.Sprite):
-    def __init__(self, groups, pos, size, font_size, text, target, args):
+    def __init__(self, groups, pos, size):
         self.groups = groups
-        pg.sprite.Sprite.__init__(self, groups)
+        pg.sprite.Sprite.__init__(self, *groups)
         self.rect = pg.Rect(pos, size)
-        self.font_size = font_size
-        self.active = False
-        self.text = text
-        self.target = target
-        self.args = args
+        self.clicked = False
 
     def events(self, event_list):
-        """ EVENTS IN BUTTON,
-        RETURNS GAME STATE"""
+        """ EVENTS IN BUTTON
+        """
 
         for event in event_list:
             if event.type == pg.MOUSEBUTTONDOWN:
                 if self.rect.collidepoint(event.pos):
-                    self.target(self.args)
-                    return 'GAME'
-        return 'LOGIN'
-
-
-class LoginScreen(pg.sprite.Sprite):
-    def __init__(self, groups, image, height, width):
-        self.groups = groups
-        pg.sprite.Sprite.__init__(self, groups)
-        self.image = image
-        self.size = (width, height)
-        self.active = False
+                    self.clicked = True
+                    return
+        self.clicked = False
 
 
 class TextInputBox(pg.sprite.Sprite):
     def __init__(self, groups, pos, size, font_size):
         self.groups = groups
-        pg.sprite.Sprite.__init__(self, groups)
+        pg.sprite.Sprite.__init__(self, *groups)
         self.rect = pg.Rect(pos, size)
         self.font_size = font_size
         self.active = False
@@ -79,41 +63,31 @@ class TextInputBox(pg.sprite.Sprite):
         screen.blit(img, self.rect)
 
 
-def login_events(text, button):
+def login_events(textbox_dict: Dict[str, TextInputBox], button_dict: Dict[str, Button]) -> Optional[str]:
     """ CHECK EVENTS IN LOGIN SCREEN,
-    RETURNS WHETHER LOGIN HAS FINISHED AND GAME STATE"""
+    RETURNS THE ACTION THE USER HAS DONE"""
 
-    state = 'LOGIN'
     all_events = pg.event.get()
     for event in all_events:
         if event.type == pg.QUIT:
-            return False, 'QUIT'
-    for t in text:
-        t.events(all_events)
-    for b in button:
-        state = b.events(all_events)
-        if state == 'GAME':
-            return False, state
-    return True, state
+            return 'quit'
+    for textbox in textbox_dict.values():
+        textbox.events(all_events)
+    for button_name, button in button_dict.items():
+        button.events(all_events)
+        if button.clicked:
+            if button_name == 'login_button':
+                return 'login'
+            if button_name == 'sign_up_button':
+                return 'sign_up'
+    return None
 
 
-def login_update():
-    pass
-
-
-def sign_up(args):
-    pass
-
-
-def log_in(args):
-    pass
-
-
-def login_draw(screen, text):
+def login_draw(screen, textbox_dict: Dict[str, TextInputBox]):
     """ DRAWS TEXT FROM TEXT BOXES ONTO SCREEN,
      UPDATES SCREEN """
 
-    for t in text:
+    for t in textbox_dict.values():
         t.draw(screen)
     pg.display.update()
 
@@ -242,36 +216,42 @@ def draw(screen, all_sprites, map_img, map_rect, inv, chat, camera):
 
 def login_state(screen, clock):
     """ LOGIN STATE MAIN LOOP FUNCTION:
-    RETURNS GAME STATE, USERNAME, PASSWORD
+    RETURNS ACTION, USERNAME, PASSWORD
+    ACTION IS EITHER 'login' OR 'sign_up'
     """
 
     # SET UP TEXT BOXES:
-    text_boxes = [TextInputBox([], (555, 305), (420, 55), 45),
-                  TextInputBox([], (555, 475), (420, 55), 45)]
-    buttons = [Button([], (825, 610), (133, 55), 0, "", log_in, None),
-               Button([], (575, 610), (133, 55), 0, "", log_in, None)]
+    text_boxes = {
+        'username_textbox': TextInputBox((), (555, 305), (420, 55), 45),
+        'password_textbox': TextInputBox((), (555, 475), (420, 55), 45)
+    }
+    buttons = {
+        'sign_up_button': Button((), (825, 610), (133, 55)),
+        'login_button': Button((), (575, 610), (133, 55))
+    }
 
     # SETUP LOGIN SCREEN:
-    login = LoginScreen([], "login_screen.png", 602, 529)
-    img = pg.image.load(login.image)
+    img = pg.image.load("login_screen.png")
     screen.blit(img, (500, 140))
     pg.display.flip()
 
-    finish = True
-    state = 'LOGIN'
-    while finish:
+    action = None
+    while action is None:
         # CHECK EVENTS:
-        finish, state = login_events(text_boxes, buttons)
+        action = login_events(text_boxes, buttons)
+        if action == 'quit':
+            pg.quit()
+            quit()
         # DRAW TEXT:
         login_draw(screen, text_boxes)
         # REDRAW BACKGROUND:
         screen.blit(img, (500, 140))
         clock.tick(FPS)
 
-    username = text_boxes[0].text
-    password = text_boxes[1].text
+    username = text_boxes['username_textbox'].text
+    password = text_boxes['password_textbox'].text
     pg.event.clear()
-    return state, username, password
+    return action, username, password
 
 
 def run():
@@ -332,13 +312,7 @@ def run():
     running = True
     inv = Inventory((WIDTH, HEIGHT))
 
-    state = 'LOGIN'
-    state, username, password = login_state(screen, clock)
-
-    if state == 'QUIT':
-        # QUIT GAME
-        pg.quit()
-        quit()
+    action, username, password = login_state(screen, clock)
 
     # SETTING UP CLIENT:
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -347,14 +321,18 @@ def run():
                                            player_animations=player_anims, mob_animations=mob_anims,
                                            player_anim_speed=5, player_walk_speed=5, mob_anim_speed=15,
                                            mob_walk_speed=2, lb_address=LB_ADDRESS)
+
+        message = sock_client.connect(username=username, password=password, action=action)
+        while message is not None:
+            logging.info(f'client connection failed: {message=}, {username=}, {password=}')
+            action, username, password = login_state(screen, clock)
+            message = sock_client.connect(username=username, password=password, action=action)
     else:
         sock_client = client.Client(sock=sock, server=(SERVER_IP, SERVER_PORT), sprite_groups=sprite_groups,
                                     player_animations=player_anims, mob_animations=mob_anims,
                                     player_anim_speed=5, player_walk_speed=5, mob_anim_speed=15,
                                     mob_walk_speed=2)
-    # SOCK:
-    if not sock_client.connect(username=username, password=password):
-        raise Exception()
+        sock_client.connect(username=username)
 
     sock_thread = threading.Thread(target=sock_client.receive_updates, daemon=True)
     sock_thread.start()
@@ -370,15 +348,10 @@ def run():
     chat_thread = threading.Thread(target=client_chat.receive, args=(chat,), daemon=True)
     chat_thread.start()
 
-    # speed_pot = Item("speed_pot", player)
-    # inv.add_item(speed_pot)
-    # player.items.add(speed_pot)
-
     while running:
-        if state == 'GAME':
-            running = events(player, inv, camera, chat, sprite_groups)
-            update(all_sprites, player, camera, map_rect, sprite_groups)
-            draw(screen, sprite_groups["all"], map_img, map_rect, inv, chat, camera)
+        running = events(player, inv, camera, chat, sprite_groups)
+        update(all_sprites, player, camera, map_rect, sprite_groups)
+        draw(screen, sprite_groups["all"], map_img, map_rect, inv, chat, camera)
         clock.tick(FPS)
 
     sock_client.send_update('disconnect', {'id': player.id})

@@ -1,12 +1,33 @@
+import os
 import threading
 
 from my_server import MyJSONEncoder, default_player
 from server_chat import *
 from utils import *
+from database import DBAPI
+import string
+
+
+def check_strong_password(password: str):
+    for grp in [string.ascii_lowercase, string.ascii_uppercase, string.digits]:
+        if all(let not in password for let in grp):
+            return False
+    if len(password) < 8:
+        return False
+    return True
+
+
+def check_valid_username(username: str):
+    separators = '._ '
+    if any(let not in string.ascii_letters + string.digits + separators for let in username):
+        return False
+    if all(let in separators for let in username):
+        return False
+    return True
 
 
 class LoadBalancer:
-    def __init__(self, sock: socket.socket, servers):
+    def __init__(self, sock: socket.socket, servers, db_username, db_password, db_port):
         self.socket = sock
 
         self.servers = servers
@@ -21,6 +42,8 @@ class LoadBalancer:
         with open("super_secret_do_not_touch.txt", 'rb') as secret_key:
             self.lb_fernet = Fernet(secret_key.read())
 
+        self.dbapi = DBAPI(user=db_username, password=db_password, port=db_port)
+
     def get_server(self, chunk_idx: Tuple[int, int]):
         return self.servers[self.chunk_mapping[chunk_idx[0]][chunk_idx[1]]]
 
@@ -33,7 +56,32 @@ class LoadBalancer:
         self.socket.sendto(fernet.encrypt(data), address)
 
     def connect(self, data, client, public_key):
-        player = default_player(data['username'])
+        message = None
+        if data['action'] == 'login':
+            if not self.dbapi.verify_account(username=data['username'], password=data['password']):
+                message = 'wrong username or password'
+        elif data['action'] == 'sign_up':
+            if self.dbapi.check_account_exists(username=data['username']):
+                message = 'account already exists'
+            elif not check_strong_password(password=data['password']):
+                message = 'password too weak'
+            elif not check_valid_username(username=data['username']):
+                message = 'invalid username'
+            else:
+                self.dbapi.add_account(username=data['username'], password=data['password'])
+                self.dbapi.store_player(default_player(username=data['username']))
+
+        player = None
+        if message is None:
+            player = self.dbapi.retrieve_player(data['username'])
+            if player.id in self.clients:
+                message = 'client already connected'
+
+        if message is not None:
+            logging.info(f'client connection failed: {data=}, {message=}')
+            self.send_cmd('error', {'message': message}, client)
+            return
+
         chunk = get_chunk(player.start_pos)
         server = self.get_server(chunk)
         self.clients[player.id] = client
@@ -108,7 +156,6 @@ class LoadBalancer:
                         self.forward_updates(data, address)
                 else:
                     public_key, data = get_pk_and_data(msg)
-                    logging.debug(f'received data: {msg=}, {address=}')
 
                     if public_key not in self.fernets:
                         loaded_key = serialization.load_pem_public_key(public_key)
@@ -117,6 +164,8 @@ class LoadBalancer:
 
                     data = self.fernets[public_key].decrypt(data)
                     data = json.loads(data)
+
+                    logging.debug(f'received data: {address=}, {data=}')
 
                     if data["cmd"] == "connect":
                         self.connect(data=data, client=address, public_key=public_key)
@@ -130,14 +179,12 @@ def main():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind(LB_ADDRESS)
 
-    lb = LoadBalancer(servers=SERVER_ADDRESSES, sock=sock)
+    lb = LoadBalancer(servers=SERVER_ADDRESSES, sock=sock, db_username=os.environ['MYSQL_USER'],
+                      db_password=os.environ['MYSQL_PASSWORD'], db_port=os.environ['MYSQL_PORT'])
 
     # setting up chat
     server_chat = ChatServer()
     threading.Thread(target=server_chat.start).start()
-
-    # for row in lb.chunk_mapping:
-    #     print(row)
 
     lb.receive_packets()
 

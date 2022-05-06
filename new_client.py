@@ -1,5 +1,5 @@
 import logging
-
+from typing import Optional
 from client import *
 
 
@@ -29,10 +29,20 @@ class NewClient(Client):
         except Exception:
             logging.exception(f'exception in get_data')
 
-    def connect(self, username='ariel'):
-        self.send_cmd('connect', {'username': username}, self.lb_address)
+    def connect(self, username, password, action) -> Optional[str]:
+        """
+        connect to the load balancer using the given username and password
+        :param username: the username
+        :param password: the password
+        :param action: either 'login' or 'sign_up'
+        :return: the error message on error and None on success
+        """
+        self.send_cmd('connect', {'username': username, 'password': password, 'action': action}, self.lb_address)
         try:
             data, address = self.sock_wrapper.recv_from()
+            if data['cmd'] == 'error':
+                return data['message']
+
             assert data['cmd'] == 'redirect', address == self.lb_address
             logging.debug(f'received redirect from lb: {data=}')
             self.server = tuple(data['server'])
@@ -42,6 +52,11 @@ class NewClient(Client):
             self.init(data)
         except Exception:
             logging.exception(f'exception in connect')
+
+    def remove_data(self, data):
+        for entity_id in data['entities']:
+            entity = self.get_entity_by_id(entity_id)
+            entity.kill()
 
     def receive_updates(self):
         while True:
@@ -66,6 +81,9 @@ class NewClient(Client):
                     elif cmd == 'get_data':
                         logging.debug(f'received data: {data=}')
                         self.get_data(data)
+                elif cmd == 'remove_data':
+                    logging.debug(f'removing data: {data=}')
+                    self.remove_data(data)
                 else:
                     logging.warning(f'received json from an unknown source: {data=}, {address=}')
             except Exception:
