@@ -242,7 +242,7 @@ class Projectile(MovingObject):
     def get_pos(self, t: int = None):
         t = t if t is not None else time.time_ns()
         dist = (self.target[0] ** 2 + self.target[1] ** 2) ** 0.5
-        norm_speed = 100 * self.get_speed() * 10 ** -9  # speed / 1 game tick = speed / (100 * 10 ** -9 nanosecs)
+        norm_speed = self.get_speed() / game_ticks_to_ns(1)
         total_time = dist / norm_speed
         p = (t - self.t0) / total_time
         return round(self.target[0] * p + self.start_pos[0]), round(self.target[1] * p + self.start_pos[1])
@@ -266,6 +266,9 @@ class Mob(Entity):
 
     def get_size(self):
         return MOB_SIZE
+
+    def get_damage(self):
+        return 20
 
 
 def generate_id(max_n=100000):
@@ -294,7 +297,7 @@ class Server:
         self.projectiles: Dict[int, Projectile] = {}
         self.dropped: Dict[str, Dropped] = {}
         self.updates = []
-        self.attacking_players: List[int] = []  # attacking players' ids
+        self.attacking_entities: List[int] = []  # attacking entity ids
 
         map_folder = 'maps'
         self.map = TiledMap(path.join(map_folder, 'map_new.tmx'))
@@ -328,11 +331,13 @@ class Server:
         if mob.type == 'dragon':
             player_pos, mob_pos = player.get_pos(), mob.get_pos()
             target = player_pos[0] - mob_pos[0], player_pos[1] - mob_pos[1]
-            proj = Projectile(id=None, start_pos=mob_pos, target=target, type='axe', attacker_id=mob.id, t0=0)
+            proj = Projectile(id=None, start_pos=mob_pos, target=target, type='axe', attacker_id=mob.id,
+                              t0=time.time_ns())
             self.projectiles[proj.id] = proj
             self.updates.append({'cmd': 'projectile', 'projectile': proj, 'id': mob.id})
         elif mob.type == 'demon':
             self.updates.append({'cmd': 'attack', 'id': mob.id})
+            self.attacking_entities.append(mob.id)
 
     def update_mobs(self):
         for _ in range(math.ceil(0.01 * len(self.mobs))):
@@ -403,13 +408,14 @@ class Server:
             return self.get_collision_data(o2, o1)
 
         id2 = o2.id if isinstance(o2, (Entity, Projectile)) else None
-        result = {'id1': o1.id, 'id2': id2, 'aligned1': None, 'aligned2': None, 'damage1': None, 'damage2': None}
+        result = {'id1': o1.id, 'id2': id2, 'aligned1': None, 'aligned2': None, 'damage1': 0, 'damage2': 0}
 
         if isinstance(o2, Projectile):
-            result['damage1'] = o2.get_damage()
-            return result
+            if o2.attacker_id != o1.id:
+                result['damage1'] = o2.get_damage()
+                return result
+            return {}
 
-        collision = False
         t = time.time_ns()
         t2 = t + game_ticks_to_ns(10)
         pos_after1, pos_after2 = o1.get_pos(t2), o2.get_pos(t2)
@@ -417,18 +423,14 @@ class Server:
                                              pos_after1=pos_after1,
                                              pos_after2=pos_after2, size1=o1.get_size(), size2=o2.get_size())
         if tuple(aligned1) != tuple(pos_after1):
-            o1.end_pos = aligned1
             result['aligned1'] = aligned1
-            collision = True
         if tuple(aligned2) != tuple(pos_after2):
-            o2.end_pos = aligned2
             result['aligned2'] = aligned2
-            collision = True
 
-        if collision:
-            if isinstance(o2, Entity) and isinstance(o1, Player) and o1.id in self.attacking_players:
+        if isinstance(o1, Entity) and isinstance(o2, Entity):
+            if o1.id in self.attacking_entities:
                 result['damage2'] = o1.get_damage()
-            if isinstance(o2, Player) and o2.id in self.attacking_players:
+            if o2.id in self.attacking_entities:
                 result['damage1'] = o2.get_damage()
             return result
         return {}
@@ -440,55 +442,26 @@ class Server:
             o1 = self.players[id1]
         elif id1 in self.mobs:
             o1 = self.mobs[id1]
+        elif id1 in self.projectiles:
+            o1 = self.projectiles[id1]
         if id2 in self.players:
             o2 = self.players[id2]
         elif id2 in self.mobs:
             o2 = self.mobs[id2]
+        elif id2 in self.projectiles:
+            o2 = self.projectiles[id2]
 
         if o1 is not None and collision_data['aligned1'] is not None:
             o1.end_pos = collision_data['aligned1']
         if o2 is not None and collision_data['aligned2'] is not None:
             o2.end_pos = collision_data['aligned2']
 
-        if o1 is not None and o2 is not None:
-            logging.debug(f'handling collision: {o1=}, {o2=}')
-            if isinstance(o1, Entity) and isinstance(o2, Projectile):
-                entity, proj = o1, o2
-                if proj.attacker_id != entity.id:
-                    logging.debug(f'entity-projectile collision: {entity=}, {proj=}')
-                    logging.debug(f'{entity.get_pos()=}, {proj.get_pos()=}')
-                    if proj.id in self.projectiles:
-                        del self.projectiles[proj.id]
-                    self.deal_damage(entity, proj.get_damage())
-
-        self.attacking_players = []
-        return
-        if isinstance(o1, Projectile) and isinstance(o2, Entity):
-            result = self.handle_collision(o2, o1)
-        if isinstance(o1, Entity) and isinstance(o2, Projectile):
-            pass
-        if isinstance(o1, Player) and isinstance(o2, Entity):
-            if o1.id in self.attacking_players:
-                result = True
-                self.deal_damage(o2, o1.get_damage())
-        if isinstance(o1, Entity) and isinstance(o2, Player):
-            if o2.id in self.attacking_players:
-                result = True
-                self.deal_damage(o1, o2.get_damage())
-
-
-
-        if isinstance(o1, Player):
-            size1 = PLAYER_SIZE
-        elif isinstance(o1, Mob):
-            size1 = MOB_SIZE
-        if isinstance(o2, Player):
-            size2 = PLAYER_SIZE
-        elif isinstance(o2, Mob):
-            size2 = MOB_SIZE
-
-
-        return result
+        if o1 is not None and isinstance(o1, Entity):
+            self.deal_damage(o1, collision_data['damage1'])
+        if o2 is not None and isinstance(o2, Entity):
+            self.deal_damage(o2, collision_data['damage2'])
+        elif o2 is not None and isinstance(o2, Projectile):
+            del self.projectiles[o2.id]
 
     def collisions_handler(self):
         t = time.time_ns()
@@ -506,7 +479,7 @@ class Server:
             if collision_data:
                 collisions_data.append(collision_data)
                 self.handle_collision(collision_data)
-        self.attacking_players = []
+            self.attacking_entities = []
         if collisions_data:
             self.updates.append({'cmd': 'collisions', 'collisions_data': collisions_data})
 
@@ -523,8 +496,9 @@ class Server:
             player.cooldowns['projectile'].t0 = time.time_ns()
             player.cooldowns['projectile'].duration = 10 ** 9
             self.projectiles[proj.id] = proj
+            data['projectile'] = proj  # add id field
         elif cmd == 'attack':
-            self.attacking_players.append(player.id)
+            self.attacking_entities.append(player.id)
         elif cmd == 'use_item':
             item_type = player.items[data['item_id']]
             player.use_item(data['item_id'])
@@ -545,17 +519,21 @@ class Server:
             else:
                 raise Exception('bad client, cannot pickup item')
         elif cmd == 'use_skill':
+            data['extra'] = {}
             if not player.cooldowns['skill'].is_over():
                 return
             logging.debug(f"{player.cooldowns['skill']=}")
             if data['skill_id'] == 1:
                 vect = pg.math.Vector2(0, 1)
+                projectile_ids = []
                 for i in range(0, 9):
                     # CIRCLE OF AXES:
                     axe = Projectile(id=None, start_pos=player.get_pos(t), type="axe", attacker_id=player.id, t0=t,
                                      target=tuple(vect))
                     self.projectiles[axe.id] = axe
+                    projectile_ids.append(axe.id)
                     vect = vect.rotate(45)
+                data['extra']['projectile_ids'] = projectile_ids
             elif data['skill_id'] == 2:
                 # BUFFS USING (INSTANTLY USED) ITEMS:
                 item_id = str(generate_id())
@@ -628,7 +606,7 @@ def main():
     while True:
         time.sleep(settings.UPDATE_TICK)
         server.update_mobs()
-        # server.collisions_handler()
+        server.collisions_handler()
         server.send_updates()
 
 
