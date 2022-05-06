@@ -200,10 +200,10 @@ def update(all_sprites, player, camera, map_rect, sprite_groups):
     camera.update(player)
 
 
-def draw(screen, all_sprites, map_img, map_rect, inv, chat, camera):
+def draw(screen, all_sprites, map_obj, inv, chat, camera):
     screen.fill(BGCOLOR)
 
-    screen.blit(map_img, camera.apply_rect(map_rect))
+    map_obj.draw(screen, camera)
 
     for sprite in all_sprites:
         screen.blit(sprite.image, camera.apply(sprite))
@@ -306,7 +306,7 @@ def run():
 
     # SETTING UP CAMERA
 
-    camera = Camera(tiled_map.width, tiled_map.height)
+    camera = Camera(tiled_map.width * MAP_COEFFICIENT, tiled_map.height * MAP_COEFFICIENT)
     pg.mouse.set_cursor(pg.cursors.broken_x)
 
     running = True
@@ -351,7 +351,7 @@ def run():
     while running:
         running = events(player, inv, camera, chat, sprite_groups)
         update(all_sprites, player, camera, map_rect, sprite_groups)
-        draw(screen, sprite_groups["all"], map_img, map_rect, inv, chat, camera)
+        draw(screen, sprite_groups["all"], tiled_map, inv, chat, camera)
         clock.tick(FPS)
 
     sock_client.send_update('disconnect', {'id': player.id})

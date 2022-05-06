@@ -32,18 +32,28 @@ class TiledMap:
                         tile = pg.transform.scale(tile, (TILESIZE, TILESIZE))
                         surface.blit(tile, (x * TILESIZE,
                                             y * TILESIZE))
+    
+    def draw(self, surface, camera):
+        rect = camera.apply_rect(self.rect)
+        for i in range(MAP_COEFFICIENT):
+            for j in range(MAP_COEFFICIENT):
+                surface.blit(self.image, rect.move(i * self.width, j * self.height))
 
     def make_map(self):
         temp_surface = pg.Surface((self.width, self.height))
         self.render(temp_surface)
         self.get_objects(apply_func=lambda x: x)
+        self.image = temp_surface
+        self.rect = temp_surface.get_rect()
         return temp_surface
     
     def get_objects(self, apply_func=lambda x: pg.Rect(x[0], x[1])) -> list:
         walls = []
         for tile in self.tmxdata.objects:
             if tile.name == 'w':
-                walls.append(apply_func(((tile.x, tile.y), (tile.width, tile.height))))
+                for i in range(MAP_COEFFICIENT):
+                    for j in range(MAP_COEFFICIENT):
+                        walls.append(apply_func(((tile.x + i * self.width, tile.y + j * self.height), (tile.width, tile.height))))
         
         return walls
 
