@@ -78,9 +78,9 @@ class Entity(pg.sprite.Sprite):
                 # UPDATE RECT AND BORDERS COLLISION CHECK:
                 self.rect.center = (
                     min(max(round(self._start[0] + (self._end[0] - self._start[0]) * self._i / self._t), 0),
-                        map_rect.width),
+                        map_rect.width * MAP_COEFFICIENT),
                     min(max(round(self._start[1] + (self._end[1] - self._start[1]) * self._i / self._t), 0),
-                        map_rect.height))
+                        map_rect.height * MAP_COEFFICIENT))
                 self._i += 1
             else:
                 self.rect.center = self._end
@@ -502,7 +502,7 @@ class Projectile(pg.sprite.Sprite):
         self._i += 1
         self.rect.center = self._start[0] + (self._speed_x * self._i), self._start[1] + (self._speed_y * self._i)
         # CHECK BORDERS:
-        if self.rect.centerx > map_rect.width or self.rect.centerx < 0 or self.rect.centery > map_rect.height or self.rect.centery < 0:
+        if self.rect.centerx > map_rect.width * MAP_COEFFICIENT * MAP_COEFFICIENT or self.rect.centerx < 0 or self.rect.centery > map_rect.height * MAP_COEFFICIENT * MAP_COEFFICIENT or self.rect.centery < 0:
             self.remove(self.groups)
 
         # CHECK COLLISION WITH ENTITIES:
