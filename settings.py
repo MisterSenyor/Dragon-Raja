@@ -1,3 +1,5 @@
+import pytmx
+
 SERVER_IP = '127.0.0.1'
 SERVER_PORT = 2222
 
@@ -30,10 +32,12 @@ CHUNK_SIZE = 500
 LB_ADDRESS = ('127.0.0.1', 13579)
 MULTIPLE_SERVERS = True
 ENABLE_SHADOWS = False
-MOB_COUNT = 10
+MOB_COUNT = 100
 
-MAP_SIZE = (10000, 5000)  # change to real value
 MAP_COEFFICIENT = 4
+tm = pytmx.TiledMap("./maps/map_new.tmx")
+MAP_SIZE = (tm.width * TILESIZE * MAP_COEFFICIENT, tm.height * TILESIZE * MAP_COEFFICIENT)
+
 CHUNKS_X, CHUNKS_Y = MAP_SIZE[0] // CHUNK_SIZE, MAP_SIZE[1] // CHUNK_SIZE
 PEACEFUL_MODE = False
 
