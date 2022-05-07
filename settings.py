@@ -30,7 +30,7 @@ CHUNK_SIZE = 500
 LB_ADDRESS = ('127.0.0.1', 13579)
 MULTIPLE_SERVERS = True
 ENABLE_SHADOWS = False
-MOB_COUNT = 10
+MOB_COUNT = 25
 
 MAP_SIZE = (10000, 5000)  # change to real value
 MAP_COEFFICIENT = 4
@@ -43,7 +43,12 @@ username_lim = 20  # username character limit
 
 INVENTORY_SIZE = 15
 
-PLAYER_SIZE = [80, 60]
-MOB_SIZE = [80, 60]
+PLAYER_SIZE = [50, 30]
+MOB_SIZE = [50, 30]
 PROJECTILE_SIZE = [40, 40]
 chat_start_seed = "Barak_Gonen"
+
+COOLDOWN_DURATIONS = {
+    'projectile': 0.2,
+    'skill': 5,
+}

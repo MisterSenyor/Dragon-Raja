@@ -227,6 +227,10 @@ class Player(Entity):
     def get_size(self):
         return PLAYER_SIZE
 
+    def reset_cooldown(self, cooldown_name):
+        self.cooldowns[cooldown_name].t0 = time.time_ns()
+        self.cooldowns[cooldown_name].duration = COOLDOWN_DURATIONS[cooldown_name] * 10 ** 9  # secs to ns
+
 
 # used for encoding items
 class MainPlayer(Player):
@@ -496,8 +500,7 @@ class Server:
             if not player.cooldowns['projectile'].is_over():
                 return
             proj = Projectile(**data['projectile'], start_pos=player.get_pos(t), t0=t, id=None)
-            player.cooldowns['projectile'].t0 = time.time_ns()
-            player.cooldowns['projectile'].duration = 10 ** 9
+            player.reset_cooldown('projectile')
             self.projectiles[proj.id] = proj
             data['projectile'] = proj  # add id field
         elif cmd == 'attack':
@@ -560,8 +563,7 @@ class Server:
 
                 item_id = str(generate_id())
                 player.items[item_id] = 'heal_pot'
-            player.cooldowns['skill'].t0 = time.time_ns()
-            player.cooldowns['skill'].duration = 10 * 10 ** 9
+            player.reset_cooldown('skill')
         self.updates.append(data)
 
     def receive_packets(self):

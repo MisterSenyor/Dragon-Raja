@@ -164,6 +164,9 @@ class MainPlayer(Player):
     def is_cooldown_over(self, action):
         return time.time_ns() > self.cooldowns[action]
 
+    def reset_cooldown(self, cooldown_name):
+        self.cooldowns[cooldown_name] = time.time_ns() + COOLDOWN_DURATIONS[cooldown_name] * 10 ** 9
+
     def move(self, x, y, send_update=True):
         super(MainPlayer, self).move(x, y)
         if send_update:
@@ -178,12 +181,12 @@ class MainPlayer(Player):
         if self.is_cooldown_over('projectile'):
             vect = pg.math.Vector2(pg.mouse.get_pos()[0] - WIDTH // 2, pg.mouse.get_pos()[1] - HEIGHT // 2)
             self.client.send_projectile(vect, proj_type)
-            self.cooldowns['projectile'] = time.time_ns() + 10 ** 9
+            self.reset_cooldown('projectile')
 
     def send_use_skill(self, skill_id):
         if self.is_cooldown_over('skill'):
             self.client.send_update('use_skill', {'id': self.id, 'skill_id': skill_id})
-            self.cooldowns['skill'] = time.time_ns() + 10 * 10 ** 9
+            self.reset_cooldown('skill')
 
     def drop_item(self, inv, sprite_groups, send_update=True):
         """ DROPS ITEM FROM CURRENT SLOT ON THE GROUND"""
@@ -402,8 +405,6 @@ class Projectile(pg.sprite.Sprite):
         self.angle = vect.as_polar()[1]  # VECTOR ANGLE
         self.id = id_
 
-        super(Projectile, self).__init__(*sprite_groups)
-
         # CHECK EACH TYPE:
         if proj_type == 'arrow':
             self._speed = 10
@@ -425,7 +426,7 @@ class Projectile(pg.sprite.Sprite):
         self._i = 0  # ITERATION
 
         # add to sprite groups ONLY after all fields are initialized (to avoid race conditions with the game thread)
-        pg.sprite.Sprite.__init__(self, sprite_groups)
+        super(Projectile, self).__init__(*sprite_groups)
 
     def update(self, map_rect, sprite_groups):
         """" UPDATES PROJECTILE: RECT POS, BORDER AND ENTITY COLLISIONS"""
