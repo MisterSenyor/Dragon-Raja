@@ -41,10 +41,11 @@ class DBAPI:
         except Exception:
             self.close()
 
-    def store_player(self, player: Player):
+    def store_player(self, player):
         try:
+            username = player.username if isinstance(player, Player) else player['username']
             self.cursor.execute("INSERT INTO players VALUES (%(username)s, %(player)s)",
-                            {'username': player.username, 'player': json.dumps(player, cls=MyJSONEncoder)})
+                                {'username': username, 'player': json.dumps(player, cls=MyJSONEncoder)})
             self.connection.commit()
         except Exception:
             self.close()

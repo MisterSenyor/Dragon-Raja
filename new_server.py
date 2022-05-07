@@ -67,6 +67,10 @@ class NewServer(Server):
                 mob.move(pos=player_pos)
                 self.updates.append({'cmd': 'move', 'pos': player_pos, 'id': mob.id})
 
+    def disconnect(self, data):
+        self.remove_player(data)
+        self.remove_client(data['address'], send_remove_data=False)
+
     def add_client(self, player, client_addr, client_public_key, init):
         client_public_key = client_public_key.encode()
         client_addr = tuple(client_addr)
@@ -116,19 +120,21 @@ class NewServer(Server):
             self.add_player(data)
         elif cmd == 'player_leaves':
             self.remove_player(data)
+            self.remove_client(data, send_remove_data=False)
         else:
             # handle update without forwarding to lb
             self.handle_update(data=data, address=address)
 
-    def remove_client(self, address):
+    def remove_client(self, address, send_remove_data=True):
         if address in self.client_public_keys:
-            json_data = {
-                'cmd': 'remove_data',
-                'entities': [entity.id for entity in list(self.players.values()) + list(self.mobs.values()) if
-                             get_chunk(entity.get_pos()) in self.private_chunks]
-            }
-            data = json.dumps(json_data, cls=MyJSONEncoder).encode() + b'\n'
-            send_all(self.socket, data, address, self.fernets[self.client_public_keys[address]])
+            if send_remove_data:
+                json_data = {
+                    'cmd': 'remove_data',
+                    'entities': [entity.id for entity in list(self.players.values()) + list(self.mobs.values()) if
+                                 get_chunk(entity.get_pos()) in self.private_chunks]
+                }
+                data = json.dumps(json_data, cls=MyJSONEncoder).encode() + b'\n'
+                send_all(self.socket, data, address, self.fernets[self.client_public_keys[address]])
             del self.fernets[self.client_public_keys[address]]
             del self.client_public_keys[address]
 
@@ -174,6 +180,9 @@ class NewServer(Server):
 
         # when cmd is move, send update whenever any one of start_pos, end_pos is in a shared chunk
         if chunk in self.shared_chunks or (cmd == 'move' and get_chunk(data['pos']) in self.shared_chunks):
+            self.forwarded_updates.append((data, chunk))
+        elif cmd == 'disconnect':
+            data['player'] = player
             self.forwarded_updates.append((data, chunk))
         else:
             self.handle_update(data=data, address=address)

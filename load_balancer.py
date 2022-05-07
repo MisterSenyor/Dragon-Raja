@@ -114,7 +114,11 @@ class LoadBalancer:
             # remove client internally
             else:
                 if update['cmd'] == 'disconnect':
+                    logging.debug(f'client disconnected: {update=}')
                     update['cmd'] = 'player_leaves'
+                    player = update.pop('player')
+                    self.dbapi.delete_player(username=player['username'])
+                    self.dbapi.store_player(player)
                     del self.clients[update['id']]
                 for adj_server_idx in get_adj_server_idx(chunk_mapping=self.chunk_mapping, chunk_idx=chunk_idx):
                     updates_by_server_idx[adj_server_idx].append(update_idx)
@@ -127,7 +131,7 @@ class LoadBalancer:
                 'cmd': 'player_enters', 'player': player
             })
             data['updates'].append({
-                'cmd': 'player_leaves', 'id': player['id']
+                'cmd': 'player_leaves', 'id': player['id'], 'address': self.clients[player['id']]
             })
             for server_idx in adj_end:
                 if server_idx not in adj_start:
