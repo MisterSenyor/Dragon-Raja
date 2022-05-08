@@ -141,9 +141,9 @@ class Client:
             if o2 is None:
                 o2 = self.get_projectile_by_id(id2)
 
-        if o1 is not None and collision_data['aligned1'] is not None:
+        if o1 is not None and isinstance(o1, entities.Entity) and collision_data['aligned1'] is not None:
             o1.move(*collision_data['aligned1'], send_update=False)
-        if o2 is not None and collision_data['aligned2'] is not None:
+        if o2 is not None and isinstance(o2, entities.Entity) and collision_data['aligned2'] is not None:
             o2.move(*collision_data['aligned2'], send_update=False)
 
         if o1 is not None and isinstance(o1, entities.Entity):

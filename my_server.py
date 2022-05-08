@@ -433,8 +433,8 @@ class Server:
 
         collision = dist(o1.get_pos(), o2.get_pos()) < 50
 
-        if isinstance(o2, Projectile) and collision:
-            if o2.attacker_id != o1.id:
+        if isinstance(o2, Projectile):
+            if o2.attacker_id != o1.id and collision:
                 result['damage1'] = o2.get_damage()
                 return result
             return {}
