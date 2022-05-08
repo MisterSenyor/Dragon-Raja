@@ -9,7 +9,7 @@ class NewClient(Client):
         self.lb_address = lb_address
 
     def send_cmd(self, cmd: str, params: dict, dst):
-        self.send_data(json.dumps({'cmd': cmd, **params}).encode() + b'\n', dst)
+        self.send_data(json.dumps({'cmd': cmd, **params}).encode(), dst)
 
     def get_data(self, data):
         try:

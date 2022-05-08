@@ -43,7 +43,7 @@ class Client:
         self.sock.sendto(data, dst)
 
     def send_update(self, cmd: str, params: dict):
-        self.send_data(json.dumps({'cmd': cmd, **params}).encode() + b'\n', self.server)
+        self.send_data(json.dumps({'cmd': cmd, **params}).encode(), self.server)
 
     def create_entity(self, cls, data, sprite_groups, walk_speed, animations, anim_speed, **kwargs):
         entity = cls(
@@ -91,10 +91,10 @@ class Client:
         self.send_update('connect', {'username': username})
         data, address = self.sock_wrapper.recv_from()
         assert address == self.server
-        logging.debug(f'init data received: {data=}')
         self.init(data)
 
     def init(self, data):
+        logging.debug(f'init data received: {data=}')
         try:
             assert data['cmd'] == 'init'
             self.main_player = self.create_main_player(data['main_player'])

@@ -20,9 +20,9 @@ pg.display.set_mode((40, 40))
 
 def default_player(username):
     items = {str(generate_id()): "speed_pot", str(generate_id()): "heal_pot", str(generate_id()): "strength_pot"}
-    cooldowns = {'skill': Cooldown(duration=0, t0=0), 'projectile': Cooldown(duration=0, t0=0)}
-    return MainPlayer(id=None, start_pos=(1400, 1360), end_pos=None,
-                      health=100, items=items, t0=0, username=username, effects=[], cooldowns=cooldowns)
+    cooldowns = {action: Cooldown(duration=duration, t0=0) for action, duration in COOLDOWN_DURATIONS.items()}
+    return Player(id=None, start_pos=(1400, 1360), end_pos=None,
+                  health=100, items=items, t0=0, username=username, effects=[], cooldowns=cooldowns)
 
 
 def game_ticks_to_ns(game_ticks: int):
@@ -68,37 +68,57 @@ def collision_align(pos_before1: tuple, pos_after1: tuple, size1: tuple, pos_bef
         tmp1 = pygame.Vector2(after1.x, y1)
         tmp2 = pygame.Vector2(x2, after1.y)
 
-        if pygame.Vector2(tmp1).distance_squared_to(before1.topleft) < pygame.Vector2(tmp2).distance_squared_to(before1.topleft):
+        if pygame.Vector2(tmp1).distance_squared_to(before1.topleft) < pygame.Vector2(tmp2).distance_squared_to(
+                before1.topleft):
             return (after1.x, y1), after2.topleft
         return (x2, after1.y), after2.topleft
     return after1.topleft, after2.topleft
 
 
-class MyJSONEncoder(json.JSONEncoder):
-    def default(self, o):
-        if isinstance(o, MovingObject):
-            t = time.time_ns()
-            data = o.__dict__.copy()
-            del data['t0']
-            data['start_pos'] = o.get_pos(t)
-            if isinstance(o, Player) and not isinstance(o, MainPlayer):
-                del data['items']
-            return data
-        if isinstance(o, Dropped):
-            return o.__dict__.copy()
-        if isinstance(o, Cooldown):
-            data = o.__dict__.copy()
-            data['duration'] -= time.time_ns() - data.pop('t0')
-            return data
-        return super(MyJSONEncoder, self).default(o)
-
-
 def player_from_dict(data: dict):
-    effects = [Effect(duration=e['duration'], t0=time.time_ns(), type=e['type']) for e in data.pop('effects')]
-    cooldowns = {action: Cooldown(duration=c['duration'], t0=time.time_ns()) for action, c
-                 in data.pop('cooldowns').items()}
-    p = MainPlayer(**data, t0=time.time_ns(), effects=effects, cooldowns=cooldowns)
+    if 'effects' in data:
+        effects = [Effect(duration=e['duration'], t0=time.time_ns(), type=e['type']) for e in data.pop('effects')]
+    else:
+        effects = []
+    if 'cooldowns' in data:
+        cooldowns = {action: Cooldown(duration=c['duration'], t0=time.time_ns()) for action, c
+                     in data.pop('cooldowns').items()}
+    else:
+        cooldowns = {action: Cooldown(duration=duration, t0=time.time_ns()) for action, duration
+                     in COOLDOWN_DURATIONS.items()}
+    items = data.pop('items') if 'items' in data else {}
+    p = Player(**data, t0=time.time_ns(), effects=effects, cooldowns=cooldowns, items=items)
     return p
+
+
+def json_encode(player, items=False, cooldowns=False, effects=False, todict=False):
+    class MyJSONEncoder(json.JSONEncoder):
+        def default(self, o):
+            if isinstance(o, MovingObject):
+                t = time.time_ns()
+                data = o.__dict__.copy()
+                del data['t0']
+                data['start_pos'] = o.get_pos(t)
+                if isinstance(o, Player):
+                    if not items:
+                        del data['items']
+                    if not effects:
+                        del data['effects']
+                    if not cooldowns:
+                        del data['cooldowns']
+                return data
+            if isinstance(o, Dropped):
+                return o.__dict__.copy()
+            if isinstance(o, Cooldown):
+                data = o.__dict__.copy()
+                data['duration'] -= time.time_ns() - data.pop('t0')
+                return data
+            return super(MyJSONEncoder, self).default(o)
+
+    data = json.dumps(player, cls=MyJSONEncoder).encode()
+    if todict:
+        return json.loads(data)
+    return data
 
 
 @dataclass
@@ -232,11 +252,6 @@ class Player(Entity):
         self.cooldowns[cooldown_name].duration = COOLDOWN_DURATIONS[cooldown_name] * 10 ** 9  # secs to ns
 
 
-# used for encoding items
-class MainPlayer(Player):
-    pass
-
-
 @dataclass
 class Projectile(MovingObject):
     target: Tuple[int, int]
@@ -357,15 +372,15 @@ class Server:
         player = default_player(data['username'])
         self.updates.append({'cmd': 'player_enters', 'player': player})
 
-        data = json.dumps({
+        data = {
             'cmd': 'init',
-            'main_player': player,
+            'main_player': json_encode(player, items=True, todict=True),
             'players': list(self.players.values()),
             'mobs': list(self.mobs.values()),
             'projectiles': list(self.projectiles.values()),
             'dropped': list(self.dropped.values())
-        }, cls=MyJSONEncoder).encode() + b'\n'
-        send_all(self.socket, data, address)
+        }
+        send_all(self.socket, json_encode(data), address)
 
         self.client_public_keys.append(address)
         self.players[player.id] = player
@@ -587,9 +602,10 @@ class Server:
         if settings.ENABLE_SHADOWS:
             self.updates.append({
                 'cmd': 'shadows',
-                'entities': [{'id': entity.id, 'pos': entity.get_pos()} for entity in list(self.players.values()) + list(self.mobs.values())]
+                'entities': [{'id': entity.id, 'pos': entity.get_pos()} for entity in list(self.players.values()) +
+                             list(self.mobs.values())]
             })
-        data = json.dumps({'cmd': 'update', 'updates': self.updates}, cls=MyJSONEncoder).encode() + b'\n'
+        data = json_encode({'cmd': 'update', 'updates': self.updates})
         self.updates.clear()
         for client in self.client_public_keys:
             send_all(self.socket, data, client)

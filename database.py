@@ -39,15 +39,32 @@ class DBAPI:
                 {'database': DATABASE_NAME}
             )
         except Exception:
+            logging.exception('db exception')
             self.close()
 
     def store_player(self, player):
         try:
             username = player.username if isinstance(player, Player) else player['username']
+            player_data = json_encode(player, items=True)
             self.cursor.execute("INSERT INTO players VALUES (%(username)s, %(player)s)",
-                                {'username': username, 'player': json.dumps(player, cls=MyJSONEncoder)})
+                                {'username': username, 'player': player_data})
             self.connection.commit()
         except Exception:
+            logging.exception('db exception')
+            self.close()
+
+    def update_players(self, players):
+        try:
+            self.cursor.executemany(
+                'UPDATE players SET player = %(player)s WHERE username = %(username)s',
+                [{
+                    'username': player.username if isinstance(player, Player) else player['username'],
+                    'player': json_encode(player)
+                } for player in players]
+            )
+            self.connection.commit()
+        except Exception:
+            logging.exception('db exception')
             self.close()
 
     def retrieve_player(self, username) -> Optional[Player]:
@@ -58,6 +75,7 @@ class DBAPI:
                 return None
             return player_from_dict(json.loads(result[0]))
         except Exception:
+            logging.exception('db exception')
             self.close()
 
     def delete_player(self, username):
@@ -65,6 +83,7 @@ class DBAPI:
             self.cursor.execute('DELETE FROM players WHERE username = %(username)s', {'username': username})
             self.connection.commit()
         except Exception:
+            logging.exception('db exception')
             self.close()
 
     def verify_account(self, username, password):
@@ -77,6 +96,7 @@ class DBAPI:
             hash_, salt = result
             return hash_password(password, bytes.fromhex(salt)) == bytes.fromhex(hash_)
         except Exception:
+            logging.exception('db exception')
             self.close()
 
     def add_account(self, username, password):
@@ -87,6 +107,7 @@ class DBAPI:
             self.cursor.execute(query, (username, hash_.hex(), salt.hex()))
             self.connection.commit()
         except Exception:
+            logging.exception('db exception')
             self.close()
 
     def remove_account(self, username):
@@ -94,6 +115,7 @@ class DBAPI:
             self.cursor.execute("DELETE FROM users WHERE username = %(username)s", {'username': username})
             self.connection.commit()
         except Exception:
+            logging.exception('db exception')
             self.close()
 
     def check_account_exists(self, username):
@@ -102,6 +124,7 @@ class DBAPI:
             result = self.cursor.fetchone()
             return result is not None
         except Exception:
+            logging.exception('db exception')
             self.close()
 
     def close(self):

@@ -1,4 +1,5 @@
 import sys
+import threading
 
 from my_server import *
 from settings import *
@@ -77,7 +78,7 @@ class NewServer(Server):
         if init:
             json_data = {
                 'cmd': 'init',
-                'main_player': player,
+                'main_player': json_encode(player, items=True, todict=True),
                 'players': list(self.players.values()),
                 'mobs': list(self.mobs.values()),
                 'projectiles': list(self.projectiles.values()),
@@ -90,7 +91,7 @@ class NewServer(Server):
                 'mobs': list(self.mobs.values()),
                 'dropped': list(self.dropped.values())
             }
-        data = json.dumps(json_data, cls=MyJSONEncoder).encode() + b'\n'
+        data = json_encode(json_data)
         loaded_key = serialization.load_pem_public_key(client_public_key)
         fernet = get_fernet(loaded_key, self.server_private_key)
         self.client_public_keys[client_addr] = client_public_key
@@ -120,7 +121,7 @@ class NewServer(Server):
             self.add_player(data)
         elif cmd == 'player_leaves':
             self.remove_player(data)
-            self.remove_client(data, send_remove_data=False)
+            self.remove_client(tuple(data['address']), send_remove_data=False)
         else:
             # handle update without forwarding to lb
             self.handle_update(data=data, address=address)
@@ -133,8 +134,7 @@ class NewServer(Server):
                     'entities': [entity.id for entity in list(self.players.values()) + list(self.mobs.values()) if
                                  get_chunk(entity.get_pos()) in self.private_chunks]
                 }
-                data = json.dumps(json_data, cls=MyJSONEncoder).encode() + b'\n'
-                send_all(self.socket, data, address, self.fernets[self.client_public_keys[address]])
+                send_all(self.socket, json_encode(json_data), address, self.fernets[self.client_public_keys[address]])
             del self.fernets[self.client_public_keys[address]]
             del self.client_public_keys[address]
 
@@ -205,8 +205,8 @@ class NewServer(Server):
             updates.append(update)
             chunks.append(chunk)
         if updates:
-            data = json.dumps({'cmd': 'forward_updates', 'updates': updates, 'chunks': chunks,
-                               'moving_players': moving_players}, cls=MyJSONEncoder).encode() + b'\n'
+            data = json_encode({'cmd': 'forward_updates', 'updates': updates, 'chunks': chunks,
+                               'moving_players': moving_players})
             send_all(self.socket, data, self.lb_address, self.lb_fernet)
             logging.debug(f'updates sent to lb: {updates=}, {chunks=}')
         self.forwarded_updates.clear()
@@ -215,12 +215,21 @@ class NewServer(Server):
         if settings.ENABLE_SHADOWS:
             self.updates.append({
                 'cmd': 'shadows',
-                'entities': [{'id': entity.id, 'pos': entity.get_pos()} for entity in list(self.players.values()) + list(self.mobs.values())]
+                'entities': [{'id': entity.id, 'pos': entity.get_pos()} for entity in list(self.players.values()) +
+                             list(self.mobs.values())]
             })
-        data = json.dumps({'cmd': 'update', 'updates': self.updates}, cls=MyJSONEncoder).encode() + b'\n'
+        data = json_encode({'cmd': 'update', 'updates': self.updates})
         self.updates.clear()
         for client in self.client_public_keys:
             send_all(self.socket, data, client, self.fernets[self.client_public_keys[client]])
+
+    def backups_sender(self):
+        while True:
+            time.sleep(BACKUP_DELAY)
+            if self.players:
+                data = json_encode({'cmd': 'backups', 'players': self.players}, items=True)
+                send_all(self.socket, data, self.lb_address, self.lb_fernet)
+                logging.info(f'backup sent to db')
 
 
 def main():
@@ -249,8 +258,12 @@ def main():
 
     server = NewServer(sock=sock, lb_address=LB_ADDRESS, shared_chunks=shared_chunks, server_chunks=server_chunks)
     server.generate_mobs(MOB_COUNT)
+
     receive_thread = threading.Thread(target=server.receive_packets)
     receive_thread.start()
+
+    backups_thread = threading.Thread(target=server.backups_sender)
+    backups_thread.start()
 
     while True:
         time.sleep(settings.UPDATE_TICK)

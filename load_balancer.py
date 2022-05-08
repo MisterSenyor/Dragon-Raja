@@ -1,7 +1,7 @@
 import os
 import threading
 
-from my_server import MyJSONEncoder, default_player
+from my_server import json_encode, default_player
 from server_chat import *
 from utils import *
 from database import DBAPI
@@ -47,8 +47,8 @@ class LoadBalancer:
     def get_server(self, chunk_idx: Tuple[int, int]):
         return self.servers[self.chunk_mapping[chunk_idx[0]][chunk_idx[1]]]
 
-    def send_cmd(self, cmd: str, params: dict, address):
-        data = json.dumps({'cmd': cmd, **params}, cls=MyJSONEncoder).encode() + b'\n'
+    def send_cmd(self, cmd: str, params: dict, address, **kwargs):
+        data = json_encode({'cmd': cmd, **params}, **kwargs)
         if address not in self.servers:
             fernet = self.fernets[self.client_public_keys[address]]
         else:
@@ -69,7 +69,8 @@ class LoadBalancer:
                 message = 'invalid username'
             else:
                 self.dbapi.add_account(username=data['username'], password=data['password'])
-                self.dbapi.store_player(default_player(username=data['username']))
+                player = default_player(username=data['username'])
+                self.dbapi.store_player(player)
 
         player = None
         if message is None:
@@ -88,7 +89,7 @@ class LoadBalancer:
         self.player_chunks[player.id] = chunk
         self.send_cmd(cmd='connect',
                       params={'player': player, 'client': client, 'client_key': public_key.decode()},
-                      address=server)
+                      address=server, items=True)
         self.send_cmd('redirect', {'server': server}, client)
         logging.debug(f'new client connected: {client=}, {player=}, {server=}, {chunk=}')
 
@@ -148,6 +149,10 @@ class LoadBalancer:
             if updates_idx:
                 self.send_cmd('update', {'updates': [data['updates'][update] for update in updates_idx]}, server)
 
+    def backup(self, data, address):
+        logging.debug(f'backing up data: {address=}, {data=}')
+        self.dbapi.update_players(data['players'].values())
+
     def receive_packets(self):
         while True:
             try:
@@ -155,9 +160,11 @@ class LoadBalancer:
 
                 if address in self.servers:
                     data = json.loads(self.lb_fernet.decrypt(msg))
+                    logging.debug(f'received data from server: {data=}, {address=}')
                     if data['cmd'] == 'forward_updates':
-                        logging.debug(f'received data: {data=}, {address=}')
                         self.forward_updates(data, address)
+                    if data['cmd'] == 'backups':
+                        self.backup(data, address)
                 else:
                     public_key, data = get_pk_and_data(msg)
 
@@ -169,7 +176,7 @@ class LoadBalancer:
                     data = self.fernets[public_key].decrypt(data)
                     data = json.loads(data)
 
-                    logging.debug(f'received data: {address=}, {data=}')
+                    logging.debug(f'received data from client: {address=}, {data=}')
 
                     if data["cmd"] == "connect":
                         self.connect(data=data, client=address, public_key=public_key)

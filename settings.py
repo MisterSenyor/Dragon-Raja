@@ -52,3 +52,5 @@ COOLDOWN_DURATIONS = {
     'projectile': 0.2,
     'skill': 5,
 }
+
+BACKUP_DELAY = 1
