@@ -83,7 +83,6 @@ class Entity(pg.sprite.Sprite):
         if self.status == 'attack':
             # CHECK IF ATTACK IS FINISHED:
             if self.animation.surface_index == len(self.animation.surfaces) - 1:
-                print("FINISHED ATTACKING")
                 self.anim_speed += 3  # RETURN PREV ANIMATION SPEED
                 if self._t == 0:  # IF NOT IN THE MIDDLE OF RUN
                     self.change_status('idle')

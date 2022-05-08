@@ -10,7 +10,7 @@ def decrypt_data(data: bin, port, seed, start=False):
     # GET CORRECT SEED FOR FIRST TIME DATA ENCRYPTED:
     if start:
         seed = ascii_seed(chat_start_seed) ^ port  # BARAK GONEN XOR'd WITH PORT
-    seed %= 150
+        seed %= 1000
     # SHIFT RIGHT BYTES:
     data = (int.from_bytes(data, byteorder='big') >> seed).to_bytes(
         len(data) - seed - seed % 3 - 1,
@@ -42,6 +42,7 @@ class ChatServer:
             # DECRYPT WITH START SEED
             client_port = client.getpeername()[1]
             seed = ascii_seed(chat_start_seed) ^ client_port  # BARAK GONEN XOR'd WITH PORT
+            seed %= 1000
             name = decrypt_data(name, client_port, seed, start=True)
 
             self.clients.append(client)
@@ -60,7 +61,8 @@ class ChatServer:
                 message = client.recv(HEADER_SIZE)
                 if message != "":
                     # CHANGE SEED:
-                    seed += (client_port + ascii_seed(chat_start_seed) % 1000)
+                    seed += (client_port + ascii_seed(chat_start_seed))
+                    seed %= 1000
                     data = decrypt_data(message, client_port, seed)
                     print("{} sent {}".format(name, data))
                     self.broadcast("{}: {}".format(name, data))

@@ -48,9 +48,11 @@ class ChatClient:
     def send(self, data: str):
         try:
             # UPDATE SEED:
-            self.seed += (self.port + ascii_seed(chat_start_seed)) % 1000
+            self.seed += self.port + ascii_seed(chat_start_seed)
+            self.seed %= 1000
             encrypted = self.encrypt_data(data)
             self.socket.send(encrypted)
+
         except Exception:
             logging.exception(f'exception while sending data: {data}')
 
@@ -60,7 +62,7 @@ class ChatClient:
         encrypted_data = data.encode()
         if start:
             self.seed = ascii_seed(self.seed) ^ self.port  # BARAK GONEN XOR'd WITH PORT
-        self.seed %= 150
+            self.seed %= 1000
         # SHIFT LEFT BYTES:
         encrypted_data = (int.from_bytes(encrypted_data, byteorder='big') << self.seed).to_bytes(
             len(encrypted_data) + self.seed + self.seed % 3 + 1,
