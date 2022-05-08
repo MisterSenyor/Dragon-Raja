@@ -307,7 +307,7 @@ def random_drop_pos(pos):
 class Server:
     def __init__(self, sock: socket.socket):
         self.socket = sock
-        self.client_public_keys = []
+        self.clients = set()
 
         self.players: Dict[int, Player] = {}
         self.mobs: Dict[int, Mob] = {}
@@ -382,43 +382,45 @@ class Server:
         }
         send_all(self.socket, json_encode(data), address)
 
-        self.client_public_keys.append(address)
+        self.clients.add(address)
         self.players[player.id] = player
 
         logging.debug(f'new client connected: {address=}, {player=}')
 
     def disconnect(self, data, address):
-        self.client_public_keys.remove(address)
+        self.clients.remove(address)
 
         del self.players[data['id']]
         self.updates.append({'cmd': 'player_leaves', 'id': data['id']})
 
         logging.debug(f'client disconnected: {address=}, {data=}')
 
+    def handle_death(self, entity: Entity):
+        pos = entity.get_pos()
+        if isinstance(entity, Player):
+            if entity.id in self.players:
+                del self.players[entity.id]
+                drops = []
+                for item_id, item_type in entity.items.items():
+                    drops.append(Dropped(
+                        item_id=item_id, item_type=item_type,
+                        pos=random_drop_pos(pos)))
+        elif isinstance(entity, Mob):
+            if entity.id in self.mobs:
+                del self.mobs[entity.id]
+            drops = [Dropped(
+                item_id=str(generate_id()),
+                item_type=random.choice(['strength_pot', 'heal_pot', 'speed_pot', 'useless_card']),
+                pos=random_drop_pos(pos))
+                for _ in range(random.randint(2, 3))]
+        for drop in drops:
+            self.dropped[drop.item_id] = drop
+        logging.debug(f'entity died: {entity=}')
+
     def deal_damage(self, entity: Entity, damage: int):
         entity.health -= damage
         if entity.health <= 0:
-            pos = entity.get_pos()
-            if isinstance(entity, Player):
-                if entity.id in self.players:
-                    del self.players[entity.id]
-                    drops = []
-                    for item_id, item_type in entity.items.items():
-                        drops.append(Dropped(
-                            item_id=item_id, item_type=item_type,
-                            pos=random_drop_pos(pos)))
-            elif isinstance(entity, Mob):
-                if entity.id in self.mobs:
-                    del self.mobs[entity.id]
-                drops = [Dropped(
-                    item_id=str(generate_id()),
-                    item_type=random.choice(['strength_pot', 'heal_pot', 'speed_pot', 'useless_card']),
-                    pos=random_drop_pos(pos))
-                    for _ in range(random.randint(2, 3))]
-            for drop in drops:
-                self.dropped[drop.item_id] = drop
-            self.updates.append({'cmd': 'entity_died', 'id': entity.id, 'drops': drops})
-            logging.debug(f'entity died: {entity=}')
+            self.handle_death(entity)
 
     def get_collision_data(self, o1, o2):
         if not isinstance(o1, Entity) and not isinstance(o2, Entity):
@@ -429,7 +431,9 @@ class Server:
         id2 = o2.id if isinstance(o2, (Entity, Projectile)) else None
         result = {'id1': o1.id, 'id2': id2, 'aligned1': None, 'aligned2': None, 'damage1': 0, 'damage2': 0}
 
-        if isinstance(o2, Projectile):
+        collision = dist(o1.get_pos(), o2.get_pos()) < 50
+
+        if isinstance(o2, Projectile) and collision:
             if o2.attacker_id != o1.id:
                 result['damage1'] = o2.get_damage()
                 return result
@@ -446,7 +450,7 @@ class Server:
         if tuple(aligned2) != tuple(pos_after2):
             result['aligned2'] = aligned2
 
-        if isinstance(o1, Entity) and isinstance(o2, Entity):
+        if isinstance(o1, Entity) and isinstance(o2, Entity) and collision:
             if o1.id in self.attacking_entities:
                 result['damage2'] = o1.get_damage()
             if o2.id in self.attacking_entities:
@@ -501,7 +505,7 @@ class Server:
             if collision_data:
                 collisions_data.append(collision_data)
                 self.handle_collision(collision_data)
-            self.attacking_entities = []
+        self.attacking_entities = []
         if collisions_data:
             self.updates.append({'cmd': 'collisions', 'collisions_data': collisions_data})
 
@@ -589,7 +593,7 @@ class Server:
                 logging.debug(f'received data: {data=}')
 
                 if data["cmd"] == "connect":
-                    if address not in self.client_public_keys:
+                    if address not in self.clients:
                         self.connect(data=data, address=address)
                 elif data["cmd"] == "disconnect":
                     self.disconnect(data=data, address=address)
@@ -607,7 +611,7 @@ class Server:
             })
         data = json_encode({'cmd': 'update', 'updates': self.updates})
         self.updates.clear()
-        for client in self.client_public_keys:
+        for client in self.clients:
             send_all(self.socket, data, client)
 
 

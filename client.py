@@ -39,7 +39,7 @@ class Client:
         self.serialized_public_key = serialize_public_key(client_private_key.public_key())
 
     def send_data(self, data: bytes, dst):
-        data = self.serialized_public_key + self.fernet.encrypt(data)
+        data = str(self.main_player.id).zfill(6).encode() + self.fernet.encrypt(data)
         self.sock.sendto(data, dst)
 
     def send_update(self, cmd: str, params: dict):

@@ -239,11 +239,6 @@ class MainPlayer(Player):
                 self.client.send_update('use_item', {'item_id': item.item_id, 'id': self.id})
             item.kill()
 
-    def handle_death(self):
-        super(MainPlayer, self).handle_death()
-        pg.quit()
-        sys.exit()
-
 
 class Item(pg.sprite.Sprite):
     """" ITEM CLASS, GETS ITEM TYPE, OWNER (ENTITY)"""

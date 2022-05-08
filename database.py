@@ -73,7 +73,10 @@ class DBAPI:
             result = self.cursor.fetchone()
             if result is None:
                 return None
-            return player_from_dict(json.loads(result[0]))
+            player = player_from_dict(json.loads(result[0]))
+            player.health = 100
+            player.end_pos = player.start_pos
+            return player
         except Exception:
             logging.exception('db exception')
             self.close()
