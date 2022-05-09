@@ -174,9 +174,11 @@ class MainPlayer(Player):
         if send_update:
             self.client.send_update('attack', {'id': self.id})
 
-    def projectile_attack(self, proj_type):
+    def projectile_attack(self, proj_type, camera):
         if self.is_cooldown_over('projectile'):
-            vect = pg.math.Vector2(pg.mouse.get_pos()[0] - WIDTH // 2, pg.mouse.get_pos()[1] - HEIGHT // 2)
+            mouse = pg.mouse.get_pos()
+            vect = pg.math.Vector2(mouse[0] - camera.apply(self).topleft[0],
+                    mouse[1] - camera.apply(self).topleft[1])
             self.client.send_projectile(vect, proj_type)
             self.cooldowns['projectile'] = time.time_ns() + 10 ** 9
 

@@ -166,7 +166,7 @@ def handle_mouse(player, event, inv, camera, sprite_groups):
         if inv.weapons[inv.weapon_held] == 'sword':
             player.melee_attack()
         else:
-            player.projectile_attack(inv.weapons[inv.weapon_held])
+            player.projectile_attack(inv.weapons[inv.weapon_held], camera)
 
     # CHECK MOUSE SCROLL WHEEL:
     elif event.button > 3:
@@ -206,6 +206,8 @@ def draw(screen, all_sprites, map_obj, inv, chat, camera):
     map_obj.draw(screen, camera)
 
     for sprite in all_sprites:
+        screen.unlock()
+        sprite.image.unlock()
         screen.blit(sprite.image, camera.apply(sprite))
         sprite.draw(screen, camera)
     inv.render(screen)  # RENDER INVENTORY

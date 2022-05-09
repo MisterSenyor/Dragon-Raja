@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from os import path
 from typing import List, Optional
 
-import pygame
 import pygame as pg
 from scipy.spatial import KDTree
 
@@ -14,8 +13,6 @@ import settings
 from Tilemap import TiledMap
 from server_chat import *
 from utils import *
-
-pg.display.set_mode((40, 40))
 
 
 def default_player(username):
@@ -65,10 +62,10 @@ def collision_align(pos_before1: tuple, pos_after1: tuple, size1: tuple, pos_bef
         y1 = round(m * after1.x + n)
         x2 = round((after1.y - n) / m)
 
-        tmp1 = pygame.Vector2(after1.x, y1)
-        tmp2 = pygame.Vector2(x2, after1.y)
+        tmp1 = pg.Vector2(after1.x, y1)
+        tmp2 = pg.Vector2(x2, after1.y)
 
-        if pygame.Vector2(tmp1).distance_squared_to(before1.topleft) < pygame.Vector2(tmp2).distance_squared_to(before1.topleft):
+        if pg.Vector2(tmp1).distance_squared_to(before1.topleft) < pg.Vector2(tmp2).distance_squared_to(before1.topleft):
             return (after1.x, y1), after2.topleft
         return (x2, after1.y), after2.topleft
     return after1.topleft, after2.topleft
