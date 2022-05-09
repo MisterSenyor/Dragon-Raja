@@ -322,7 +322,6 @@ class Inventory:
         self.rect.bottom = screen_size[1]
         self.rect.centerx = screen_size[0] // 2
 
-        self.slot_img = pg.image.load("Graphics/cur_slot.png")
         self.special_slot_img = pg.image.load("Graphics/slot.png")
         self.cur_slot = 0  # current slot
 
@@ -335,20 +334,24 @@ class Inventory:
         # DRAW INVENTORY:
         screen.blit(self.image, self.rect)
 
+        slot_width = self.image.get_width() // INVENTORY_SIZE
+
         # DRAW SLOTS AND ITEMS:
         for i in range(INVENTORY_SIZE):
-            text = self.font.render(str(i + 1), True, (0, 0, 0))
-            screen.blit(text, (self.rect.midleft[0] + i * 40, self.rect.midleft[1]))  # NUM
 
             # CHECK IF SLOT IS EMPTY:
             if self.slots[i] == 0:
                 continue
 
             # DRAW ITEM:
-            screen.blit(self.slots[i].image, (self.rect.topleft[0] + i * 40, self.rect.topleft[1]))
+            image_rect = self.slots[i].rect
+            screen.blit(self.slots[i].image, (self.rect.topleft[0] + i * slot_width + (slot_width - image_rect.w) // 2,
+                                              self.rect.topleft[1] + (self.image.get_height() - image_rect.h) // 2))
 
         # DRAW OUTLINE AROUND CURRENT SLOT:
-        screen.blit(self.slot_img, (self.rect.topleft[0] + self.cur_slot * 40, self.rect.topleft[1]))
+        pg.draw.rect(screen, (0, 0, 0), (self.rect.topleft[0] + self.cur_slot * slot_width, self.rect.topleft[1],
+                                         slot_width, self.image.get_height()),
+                     width=2)
 
         # DRAW SPECIAL SLOT
         screen.blit(self.special_slot_img, (self.rect.topleft[0] - 60, self.rect.topleft[1]))

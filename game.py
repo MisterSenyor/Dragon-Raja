@@ -1,13 +1,11 @@
 from os import path
-
 from typing import Optional
-import client
+
 import new_client
 from Tilemap import *
 from animated_sprite import *
-from entities import *
-
 from client_chat import *
+from entities import *
 
 pg.init()
 
@@ -30,6 +28,7 @@ class Button(pg.sprite.Sprite):
                     return
         self.clicked = False
 
+
 class TextBox(pg.sprite.Sprite):
     def __init__(self, groups, pos, size, font_size, color=BLACK):
         self.groups = groups
@@ -44,11 +43,16 @@ class TextBox(pg.sprite.Sprite):
         font = pygame.font.SysFont('./graphics/fonts/comicsans.ttf', self.font_size)
         img = font.render(self.text, True, self.color)
         screen.blit(img, self.rect)
-    
+
     def events(self, event_list):
         pass
 
+
 class TextInputBox(TextBox):
+    def __init__(self, *args, **kwargs):
+        super(TextInputBox, self).__init__(*args, **kwargs)
+        self.active = False
+
     def events(self, event_list):
         for event in event_list:
             if event.type == pg.MOUSEBUTTONDOWN:
@@ -64,6 +68,7 @@ class TextInputBox(TextBox):
                     # CHECK USERNAME CHARACTER LIMIT
                     if len(self.text) <= username_lim:
                         self.text += event.unicode
+
 
 def login_events(textbox_dict: Dict[str, TextInputBox], button_dict: Dict[str, Button]) -> Optional[str]:
     """ CHECK EVENTS IN LOGIN SCREEN,
@@ -107,7 +112,7 @@ def update_dir(player: Entity, camera):
 def handle_keyboard(player: MainPlayer, inv, camera, key, chat, sprite_groups):
     if key == 122:  # Z key
         inv.switch_weapon()
-        
+
     elif key == 114:  # R KEY
         player.use_item(inv, sprite_groups)
 
@@ -162,7 +167,7 @@ def handle_mouse(player, event, inv, camera, sprite_groups):
         mouse = pg.mouse.get_pos()
         player.move(player.rect.centerx + mouse[0] - camera.apply(player).topleft[0],
                     player.rect.centery + mouse[1] - camera.apply(player).topleft[1])
-   
+
     elif event.button == 3:
         update_dir(player, camera)
         if inv.weapons[inv.weapon_held] == 'sword':
@@ -172,7 +177,7 @@ def handle_mouse(player, event, inv, camera, sprite_groups):
 
     # CHECK MOUSE SCROLL WHEEL:
     elif event.button > 3:
-        if event.button % 2 == 0 and inv.cur_slot < 14:  # SCROLL UP
+        if event.button % 2 == 0 and inv.cur_slot < INVENTORY_SIZE - 1:  # SCROLL UP
             inv.cur_slot += 1
         else:  # SCROLL DOWN
             if inv.cur_slot > 0:
@@ -237,6 +242,7 @@ def login_state(screen, clock, output):
 
     # SETUP LOGIN SCREEN:
     img = pg.image.load("login_screen.png")
+    screen.fill((0, 0, 0))
     screen.blit(img, (500, 140))
     pg.display.flip()
 
@@ -297,7 +303,7 @@ def run():
             'idle': AnimatedSprite('graphics/demon_axe_red/ready_', 6, False),
             'run': AnimatedSprite('graphics/demon_axe_red/run_', 6, False),
             'death': AnimatedSprite('graphics/demon_axe_red/dead_', 4, False),
-            'attack': AnimatedSprite('graphics/demon_axe_red/attack1_', 6, False), 
+            'attack': AnimatedSprite('graphics/demon_axe_red/attack1_', 6, False),
         }
     }
 
@@ -318,7 +324,7 @@ def run():
     inv = Inventory((WIDTH, HEIGHT))
 
     output = TextBox((), (500, 80), (420, 55), 40, color=(255, 0, 0))
-    
+
     action, username, password = login_state(screen, clock, output)
 
     # SETTING UP CLIENT:
@@ -332,7 +338,7 @@ def run():
         message = sock_client.connect(username=username, password=password, action=action)
         while message is not None:
             logging.info(f'client connection failed: {message=}, {username=}, {password=}')
-            output.text = "Username or password is incorrect"
+            output.text = message
             action, username, password = login_state(screen, clock, output)
             message = sock_client.connect(username=username, password=password, action=action)
     else:

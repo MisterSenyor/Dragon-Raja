@@ -12,13 +12,15 @@ def check_strong_password(password: str):
     for grp in [string.ascii_lowercase, string.ascii_uppercase, string.digits]:
         if all(let not in password for let in grp):
             return False
-    if len(password) < 8:
+    if len(password) < 8 or len(password) > 25:
         return False
     return True
 
 
 def check_valid_username(username: str):
     separators = '._ '
+    if len(username) > 20:
+        return False
     if any(let not in string.ascii_letters + string.digits + separators for let in username):
         return False
     if all(let in separators for let in username):

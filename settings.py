@@ -44,7 +44,7 @@ char_lim = 20  # chat text char lim
 
 username_lim = 20  # username character limit
 
-INVENTORY_SIZE = 15
+INVENTORY_SIZE = 10
 
 PLAYER_SIZE = [50, 30]
 MOB_SIZE = [50, 30]
