@@ -311,7 +311,7 @@ def run():
 
     # SETTING UP CAMERA
 
-    camera = Camera(tiled_map.width * MAP_COEFFICIENT, tiled_map.height * MAP_COEFFICIENT)
+    camera = Camera(tiled_map.width * MAP_COEFFICIENT, tiled_map.height * MAP_COEFFICIENT, WIDTH, HEIGHT)
     pg.mouse.set_cursor(pg.cursors.broken_x)
 
     running = True
@@ -362,8 +362,7 @@ def run():
         draw(screen, sprite_groups["all"], tiled_map, inv, chat, camera)
         clock.tick(FPS)
 
-    if not running:
-        sock_client.send_update('disconnect', {'id': player.id})
+    sock_client.send_update('disconnect', {'id': player.id})
 
     pg.quit()
 

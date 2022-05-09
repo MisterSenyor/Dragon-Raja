@@ -60,10 +60,12 @@ class TiledMap:
         return walls
 
 class Camera:
-    def __init__(self, width, height):
+    def __init__(self, width, height, screen_width, screen_height):
         self.camera = pg.Rect(0, 0, width, height)
         self.width = width
         self.height = height
+        self.screen_width = screen_width
+        self.screen_height = screen_height
 
     def apply(self, entity):
         return entity.rect.move(self.camera.topleft)
@@ -72,13 +74,13 @@ class Camera:
         return rect.move(self.camera.topleft)
 
     def update(self, target):
-        x = -target.rect.x + int(WIDTH / 2)
-        y = -target.rect.y + int(HEIGHT / 2)
+        x = -target.rect.x + int(self.screen_width / 2)
+        y = -target.rect.y + int(self.screen_height / 2)
         
 
         # limit scrolling to map size
         x = min(0, x)  # left
         y = min(0, y)  # top
-        x = max(-(self.width - WIDTH), x)  # right
-        y = max(-(self.height - HEIGHT), y)  # bottom
+        x = max(-(self.width - self.screen_width), x)  # right
+        y = max(-(self.height - self.screen_height), y)  # bottom
         self.camera = pg.Rect(x, y, self.width, self.height)
