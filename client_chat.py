@@ -19,7 +19,6 @@ class ChatClient:
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             # CONNECT TO SERVER:
-            print("trying to connet with server: {}".format(SERVER_ADDRESS_TCP))
             self.socket.connect(SERVER_ADDRESS_TCP)
 
             # GET PORT NUMBER:
@@ -27,7 +26,6 @@ class ChatClient:
 
             # RECEIVE MSG
             msg = self.socket.recv(HEADER_SIZE).decode()
-            print("the server sent: {}".format(msg))
 
             # ENCRYPT AND SEND NAME
             encrypted_name = self.encrypt_data(self.name, True)
@@ -40,7 +38,6 @@ class ChatClient:
             try:
                 message = self.socket.recv(HEADER_SIZE).decode()
                 if message != '':
-                    print("server sent: {}".format(message))
                     chat.add_line(message)
             except Exception:
                 logging.exception(f'Error receiving message from server, closing connection')

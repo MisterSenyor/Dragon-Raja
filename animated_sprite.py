@@ -15,8 +15,6 @@ class AnimatedSprite(pygame.sprite.Sprite):
                     in range(count)]
          
         else:
-            for i in range(count):
-                print(path + f"{i + 1}.png")
             self.surfaces = [pygame.image.load(path + f"{i + 1}.png") for i in range(count)]
         self.surface_index = 0
         self.image = self.surfaces[self.surface_index]

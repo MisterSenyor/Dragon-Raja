@@ -313,7 +313,7 @@ class NewServer(Server):
 
 
 def main():
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=LOGLEVEL)
 
     server_idx = int(sys.argv[1])
 

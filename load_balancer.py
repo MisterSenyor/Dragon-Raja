@@ -206,7 +206,7 @@ class LoadBalancer:
 
 
 def main():
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=LOGLEVEL)
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind(LB_ADDRESS)
 
