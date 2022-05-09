@@ -208,8 +208,8 @@ def main():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind(LB_ADDRESS)
 
-    lb = LoadBalancer(servers=SERVER_ADDRESSES, sock=sock, db_username=os.environ['MYSQL_USER'],
-                      db_password=os.environ['MYSQL_PASSWORD'], db_port=os.environ['MYSQL_PORT'])
+    lb = LoadBalancer(servers=SERVER_ADDRESSES, sock=sock, db_username='root',
+                      db_password='Shmulik1sKing!', db_port=3060)
 
     # setting up chat
     server_chat = ChatServer()

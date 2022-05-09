@@ -31,18 +31,22 @@ class Button(pg.sprite.Sprite):
         self.clicked = False
 
 class TextBox(pg.sprite.Sprite):
-    def __init__(self, groups, pos, size, font_size):
+    def __init__(self, groups, pos, size, font_size, color=BLACK):
         self.groups = groups
         pg.sprite.Sprite.__init__(self, *groups)
         self.rect = pg.Rect(pos, size)
         self.font_size = font_size
         self.text = ""
+        self.color = color
 
     def draw(self, screen):
         """ DRAWS TEXT FROM TEXT BOX"""
         font = pygame.font.SysFont('./graphics/fonts/comicsans.ttf', self.font_size)
-        img = font.render(self.text, True, BLACK)
+        img = font.render(self.text, True, self.color)
         screen.blit(img, self.rect)
+
+    def events(self, eventslist):
+        pass
 
 class TextInputBox(TextBox):
     def events(self, event_list):
@@ -313,7 +317,7 @@ def run():
     running = True
     inv = Inventory((WIDTH, HEIGHT))
 
-    output = TextBox((), (555, 250) (420, 55), 40)
+    output = TextBox((), (500, 80), (420, 55), 40, color=(255,0,0))
     
     action, username, password = login_state(screen, clock, output)
 
