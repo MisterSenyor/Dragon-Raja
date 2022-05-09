@@ -39,11 +39,11 @@ class Client:
         self.serialized_public_key = serialize_public_key(client_private_key.public_key())
 
     def send_data(self, data: bytes, dst):
-        data = self.serialized_public_key + self.fernet.encrypt(data)
+        data = str(self.main_player.id).zfill(6).encode() + self.fernet.encrypt(data)
         self.sock.sendto(data, dst)
 
     def send_update(self, cmd: str, params: dict):
-        self.send_data(json.dumps({'cmd': cmd, **params}).encode() + b'\n', self.server)
+        self.send_data(json.dumps({'cmd': cmd, **params}).encode(), self.server)
 
     def create_entity(self, cls, data, sprite_groups, walk_speed, animations, anim_speed, **kwargs):
         entity = cls(
@@ -91,10 +91,10 @@ class Client:
         self.send_update('connect', {'username': username})
         data, address = self.sock_wrapper.recv_from()
         assert address == self.server
-        logging.debug(f'init data received: {data=}')
         self.init(data)
 
     def init(self, data):
+        logging.debug(f'init data received: {data=}')
         try:
             assert data['cmd'] == 'init'
             self.main_player = self.create_main_player(data['main_player'])
@@ -141,9 +141,9 @@ class Client:
             if o2 is None:
                 o2 = self.get_projectile_by_id(id2)
 
-        if o1 is not None and collision_data['aligned1'] is not None:
+        if o1 is not None and isinstance(o1, entities.Entity) and collision_data['aligned1'] is not None:
             o1.move(*collision_data['aligned1'], send_update=False)
-        if o2 is not None and collision_data['aligned2'] is not None:
+        if o2 is not None and isinstance(o2, entities.Entity) and collision_data['aligned2'] is not None:
             o2.move(*collision_data['aligned2'], send_update=False)
 
         if o1 is not None and isinstance(o1, entities.Entity):

@@ -350,13 +350,14 @@ def run():
     chat_thread = threading.Thread(target=client_chat.receive, args=(chat,), daemon=True)
     chat_thread.start()
 
-    while running:
+    while running and player.alive():
         running = events(player, inv, camera, chat, sprite_groups)
         update(all_sprites, player, camera, map_rect, sprite_groups)
         draw(screen, sprite_groups["all"], tiled_map, inv, chat, camera)
         clock.tick(FPS)
 
-    sock_client.send_update('disconnect', {'id': player.id})
+    if not running:
+        sock_client.send_update('disconnect', {'id': player.id})
 
     pg.quit()
 

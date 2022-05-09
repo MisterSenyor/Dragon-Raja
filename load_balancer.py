@@ -1,7 +1,7 @@
 import os
 import threading
 
-from my_server import MyJSONEncoder, default_player
+from my_server import json_encode, default_player
 from server_chat import *
 from utils import *
 from database import DBAPI
@@ -31,11 +31,12 @@ class LoadBalancer:
         self.socket = sock
 
         self.servers = servers
-        self.clients = {}  # id to client address
-        self.player_chunks: Dict[int, Tuple[int, int]] = {}  # id to chunk
+        self.id_to_chunk: Dict[int, Tuple[int, int]] = {}  # id to chunk
 
-        self.fernets: Dict[bytes, Fernet] = {}  # client pk to fernet
-        self.client_public_keys: Dict[Address, bytes] = {}  # client address to public key
+        self.id_to_pk = {}
+        self.id_to_fernet = {}
+        self.id_to_address = {}
+
         self.lb_private_key = load_private_ecdh_key()
 
         self.chunk_mapping = generate_chunk_mapping()
@@ -47,15 +48,16 @@ class LoadBalancer:
     def get_server(self, chunk_idx: Tuple[int, int]):
         return self.servers[self.chunk_mapping[chunk_idx[0]][chunk_idx[1]]]
 
-    def send_cmd(self, cmd: str, params: dict, address):
-        data = json.dumps({'cmd': cmd, **params}, cls=MyJSONEncoder).encode() + b'\n'
-        if address not in self.servers:
-            fernet = self.fernets[self.client_public_keys[address]]
-        else:
-            fernet = self.lb_fernet
+    def send_cmd(self, cmd: str, params: dict, address, player_id=None, fernet=None, **kwargs):
+        data = json_encode({'cmd': cmd, **params}, **kwargs)
+        if fernet is None:
+            if player_id is not None:
+                fernet = self.id_to_fernet[player_id]
+            else:
+                fernet = self.lb_fernet
         self.socket.sendto(fernet.encrypt(data), address)
 
-    def connect(self, data, client, public_key):
+    def connect(self, data, address, public_key, fernet):
         message = None
         if data['action'] == 'login':
             if not self.dbapi.verify_account(username=data['username'], password=data['password']):
@@ -69,30 +71,46 @@ class LoadBalancer:
                 message = 'invalid username'
             else:
                 self.dbapi.add_account(username=data['username'], password=data['password'])
-                self.dbapi.store_player(default_player(username=data['username']))
+                player = default_player(username=data['username'])
+                self.dbapi.store_player(player)
 
         player = None
         if message is None:
             player = self.dbapi.retrieve_player(data['username'])
-            if player.id in self.clients:
+            if player.id in self.id_to_address:
                 message = 'client already connected'
 
         if message is not None:
             logging.info(f'client connection failed: {data=}, {message=}')
-            self.send_cmd('error', {'message': message}, client)
+            self.send_cmd('error', {'message': message}, address, fernet=fernet)
             return
 
         chunk = get_chunk(player.start_pos)
-        server = self.get_server(chunk)
-        self.clients[player.id] = client
-        self.player_chunks[player.id] = chunk
-        self.send_cmd(cmd='connect',
-                      params={'player': player, 'client': client, 'client_key': public_key.decode()},
-                      address=server)
-        self.send_cmd('redirect', {'server': server}, client)
-        logging.debug(f'new client connected: {client=}, {player=}, {server=}, {chunk=}')
+        server_address = self.get_server(chunk)
 
-    def forward_updates(self, data, address):
+        self.id_to_chunk[player.id] = chunk
+        self.id_to_address[player.id] = address
+        self.id_to_fernet[player.id] = fernet
+        self.id_to_pk[player.id] = public_key
+
+        self.send_cmd(cmd='connect',
+                      params={'player': player, 'client': address, 'client_key': public_key.decode()},
+                      address=server_address, items=True)
+
+        self.send_cmd('redirect', {'server': server_address}, address, fernet=fernet)
+        logging.debug(f'new client connected: {address=}, {player=}, {server_address=}, {chunk=}')
+
+    def player_leaves(self, player):
+        logging.debug(f'client died or disconnected: {player=}')
+        self.dbapi.delete_player(username=player['username'])
+        self.dbapi.store_player(player)
+
+        del self.id_to_address[player['id']]
+        del self.id_to_pk[player['id']]
+        del self.id_to_fernet[player['id']]
+        del self.id_to_chunk[player['id']]
+
+    def forward_updates(self, data, server_address):
         updates_by_server_idx = [[] for _ in self.servers]
 
         for update_idx, chunk_idx in enumerate(data['chunks']):
@@ -100,13 +118,14 @@ class LoadBalancer:
             # redirect clients
             if update['cmd'] == 'move':
                 new_server = self.get_server(get_chunk(update['pos']))
-                if new_server != address:
-                    client = self.clients[update['id']]
-                    logging.debug(f'client changed server: {client=}, {address=}, {new_server=}')
-                    self.send_cmd('redirect', {'server': new_server}, client)
-                    self.send_cmd('add_client', {'client': client, 'id': update['id'],
-                                                 'client_key': self.client_public_keys[client].decode()}, new_server)
-                    self.send_cmd('remove_client', {'client': client, 'id': update['id']}, address)
+                if new_server != server_address:
+                    player_id = update['id']
+                    client_address = self.id_to_address[player_id]
+                    logging.debug(f'client changed server: {client_address=}, {server_address=}, {new_server=}')
+                    self.send_cmd('redirect', {'server': new_server}, client_address, player_id=player_id)
+                    self.send_cmd('add_client', {'client': client_address, 'id': player_id,
+                                                 'client_key': self.id_to_pk[player_id].decode()}, new_server)
+                    self.send_cmd('remove_client', {'client': client_address, 'id': player_id}, server_address)
                 for adj_server_idx in range(len(self.servers)):
                     if adj_server_idx in get_adj_server_idx(self.chunk_mapping, chunk_idx) or \
                             adj_server_idx in get_adj_server_idx(self.chunk_mapping, get_chunk(update['pos'])):
@@ -115,7 +134,12 @@ class LoadBalancer:
             else:
                 if update['cmd'] == 'disconnect':
                     update['cmd'] = 'player_leaves'
-                    del self.clients[update['id']]
+                    player = update.pop('player')
+                    self.player_leaves(player)
+                if update['cmd'] == 'entity_died' and update['id'] in self.id_to_address:  # if player died
+                    player = update.pop('player')
+                    self.player_leaves(player)
+
                 for adj_server_idx in get_adj_server_idx(chunk_mapping=self.chunk_mapping, chunk_idx=chunk_idx):
                     updates_by_server_idx[adj_server_idx].append(update_idx)
 
@@ -140,9 +164,13 @@ class LoadBalancer:
 
         logging.debug(f'sent updates: {updates_by_server_idx=}')
         for i, updates_idx in enumerate(updates_by_server_idx):
-            server = self.servers[i]
+            server_address = self.servers[i]
             if updates_idx:
-                self.send_cmd('update', {'updates': [data['updates'][update] for update in updates_idx]}, server)
+                self.send_cmd('update', {'updates': [data['updates'][update] for update in updates_idx]}, server_address)
+
+    def backup(self, data, address):
+        logging.debug(f'backing up data: {address=}, {data=}')
+        self.dbapi.update_players(data['players'].values())
 
     def receive_packets(self):
         while True:
@@ -151,24 +179,25 @@ class LoadBalancer:
 
                 if address in self.servers:
                     data = json.loads(self.lb_fernet.decrypt(msg))
+                    logging.debug(f'received data from server: {data=}, {address=}')
                     if data['cmd'] == 'forward_updates':
-                        logging.debug(f'received data: {data=}, {address=}')
                         self.forward_updates(data, address)
+                    if data['cmd'] == 'backups':
+                        self.backup(data, address)
                 else:
-                    public_key, data = get_pk_and_data(msg)
+                    if msg.startswith(b'-----BEGIN PUBLIC KEY-----'):
 
-                    if public_key not in self.fernets:
+                        public_key, data = get_pk_and_data(msg)
+
                         loaded_key = serialization.load_pem_public_key(public_key)
-                        self.fernets[public_key] = get_fernet(loaded_key, self.lb_private_key)
-                        self.client_public_keys[address] = public_key
+                        fernet = get_fernet(loaded_key, self.lb_private_key)
 
-                    data = self.fernets[public_key].decrypt(data)
-                    data = json.loads(data)
+                        data = fernet.decrypt(data)
+                        data = json.loads(data)
+                        logging.debug(f'received data from client: {address=}, {data=}')
 
-                    logging.debug(f'received data: {address=}, {data=}')
-
-                    if data["cmd"] == "connect":
-                        self.connect(data=data, client=address, public_key=public_key)
+                        if data["cmd"] == "connect":
+                            self.connect(data=data, address=address, public_key=public_key, fernet=fernet)
 
             except Exception:
                 logging.exception('exception while handling request')

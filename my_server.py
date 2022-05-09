@@ -17,9 +17,9 @@ from utils import *
 
 def default_player(username):
     items = {str(generate_id()): "speed_pot", str(generate_id()): "heal_pot", str(generate_id()): "strength_pot"}
-    cooldowns = {'skill': Cooldown(duration=0, t0=0), 'projectile': Cooldown(duration=0, t0=0)}
-    return MainPlayer(id=None, start_pos=(1400, 1360), end_pos=None,
-                      health=100, items=items, t0=0, username=username, effects=[], cooldowns=cooldowns)
+    cooldowns = {action: Cooldown(duration=duration, t0=0) for action, duration in COOLDOWN_DURATIONS.items()}
+    return Player(id=None, start_pos=(1400, 1360), end_pos=None,
+                  health=100, items=items, t0=0, username=username, effects=[], cooldowns=cooldowns)
 
 
 def game_ticks_to_ns(game_ticks: int):
@@ -65,37 +65,57 @@ def collision_align(pos_before1: tuple, pos_after1: tuple, size1: tuple, pos_bef
         tmp1 = pg.Vector2(after1.x, y1)
         tmp2 = pg.Vector2(x2, after1.y)
 
-        if pg.Vector2(tmp1).distance_squared_to(before1.topleft) < pg.Vector2(tmp2).distance_squared_to(before1.topleft):
+        if pg.Vector2(tmp1).distance_squared_to(before1.topleft) < pg.Vector2(tmp2).distance_squared_to(
+                before1.topleft):
             return (after1.x, y1), after2.topleft
         return (x2, after1.y), after2.topleft
     return after1.topleft, after2.topleft
 
 
-class MyJSONEncoder(json.JSONEncoder):
-    def default(self, o):
-        if isinstance(o, MovingObject):
-            t = time.time_ns()
-            data = o.__dict__.copy()
-            del data['t0']
-            data['start_pos'] = o.get_pos(t)
-            if isinstance(o, Player) and not isinstance(o, MainPlayer):
-                del data['items']
-            return data
-        if isinstance(o, Dropped):
-            return o.__dict__.copy()
-        if isinstance(o, Cooldown):
-            data = o.__dict__.copy()
-            data['duration'] -= time.time_ns() - data.pop('t0')
-            return data
-        return super(MyJSONEncoder, self).default(o)
-
-
 def player_from_dict(data: dict):
-    effects = [Effect(duration=e['duration'], t0=time.time_ns(), type=e['type']) for e in data.pop('effects')]
-    cooldowns = {action: Cooldown(duration=c['duration'], t0=time.time_ns()) for action, c
-                 in data.pop('cooldowns').items()}
-    p = MainPlayer(**data, t0=time.time_ns(), effects=effects, cooldowns=cooldowns)
+    if 'effects' in data:
+        effects = [Effect(duration=e['duration'], t0=time.time_ns(), type=e['type']) for e in data.pop('effects')]
+    else:
+        effects = []
+    if 'cooldowns' in data:
+        cooldowns = {action: Cooldown(duration=c['duration'], t0=time.time_ns()) for action, c
+                     in data.pop('cooldowns').items()}
+    else:
+        cooldowns = {action: Cooldown(duration=duration, t0=time.time_ns()) for action, duration
+                     in COOLDOWN_DURATIONS.items()}
+    items = data.pop('items') if 'items' in data else {}
+    p = Player(**data, t0=time.time_ns(), effects=effects, cooldowns=cooldowns, items=items)
     return p
+
+
+def json_encode(player, items=False, cooldowns=False, effects=False, todict=False):
+    class MyJSONEncoder(json.JSONEncoder):
+        def default(self, o):
+            if isinstance(o, MovingObject):
+                t = time.time_ns()
+                data = o.__dict__.copy()
+                del data['t0']
+                data['start_pos'] = o.get_pos(t)
+                if isinstance(o, Player):
+                    if not items:
+                        del data['items']
+                    if not effects:
+                        del data['effects']
+                    if not cooldowns:
+                        del data['cooldowns']
+                return data
+            if isinstance(o, Dropped):
+                return o.__dict__.copy()
+            if isinstance(o, Cooldown):
+                data = o.__dict__.copy()
+                data['duration'] -= time.time_ns() - data.pop('t0')
+                return data
+            return super(MyJSONEncoder, self).default(o)
+
+    data = json.dumps(player, cls=MyJSONEncoder).encode()
+    if todict:
+        return json.loads(data)
+    return data
 
 
 @dataclass
@@ -224,10 +244,9 @@ class Player(Entity):
     def get_size(self):
         return PLAYER_SIZE
 
-
-# used for encoding items
-class MainPlayer(Player):
-    pass
+    def reset_cooldown(self, cooldown_name):
+        self.cooldowns[cooldown_name].t0 = time.time_ns()
+        self.cooldowns[cooldown_name].duration = COOLDOWN_DURATIONS[cooldown_name] * 10 ** 9  # secs to ns
 
 
 @dataclass
@@ -285,7 +304,7 @@ def random_drop_pos(pos):
 class Server:
     def __init__(self, sock: socket.socket):
         self.socket = sock
-        self.client_public_keys = []
+        self.clients = set()
 
         self.players: Dict[int, Player] = {}
         self.mobs: Dict[int, Mob] = {}
@@ -350,53 +369,55 @@ class Server:
         player = default_player(data['username'])
         self.updates.append({'cmd': 'player_enters', 'player': player})
 
-        data = json.dumps({
+        data = {
             'cmd': 'init',
-            'main_player': player,
+            'main_player': json_encode(player, items=True, todict=True),
             'players': list(self.players.values()),
             'mobs': list(self.mobs.values()),
             'projectiles': list(self.projectiles.values()),
             'dropped': list(self.dropped.values())
-        }, cls=MyJSONEncoder).encode() + b'\n'
-        send_all(self.socket, data, address)
+        }
+        send_all(self.socket, json_encode(data), address)
 
-        self.client_public_keys.append(address)
+        self.clients.add(address)
         self.players[player.id] = player
 
         logging.debug(f'new client connected: {address=}, {player=}')
 
     def disconnect(self, data, address):
-        self.client_public_keys.remove(address)
+        self.clients.remove(address)
 
         del self.players[data['id']]
         self.updates.append({'cmd': 'player_leaves', 'id': data['id']})
 
         logging.debug(f'client disconnected: {address=}, {data=}')
 
+    def handle_death(self, entity: Entity):
+        pos = entity.get_pos()
+        if isinstance(entity, Player):
+            if entity.id in self.players:
+                del self.players[entity.id]
+                drops = []
+                for item_id, item_type in entity.items.items():
+                    drops.append(Dropped(
+                        item_id=item_id, item_type=item_type,
+                        pos=random_drop_pos(pos)))
+        elif isinstance(entity, Mob):
+            if entity.id in self.mobs:
+                del self.mobs[entity.id]
+            drops = [Dropped(
+                item_id=str(generate_id()),
+                item_type=random.choice(['strength_pot', 'heal_pot', 'speed_pot', 'useless_card']),
+                pos=random_drop_pos(pos))
+                for _ in range(random.randint(2, 3))]
+        for drop in drops:
+            self.dropped[drop.item_id] = drop
+        logging.debug(f'entity died: {entity=}')
+
     def deal_damage(self, entity: Entity, damage: int):
         entity.health -= damage
         if entity.health <= 0:
-            pos = entity.get_pos()
-            if isinstance(entity, Player):
-                if entity.id in self.players:
-                    del self.players[entity.id]
-                    drops = []
-                    for item_id, item_type in entity.items.items():
-                        drops.append(Dropped(
-                            item_id=item_id, item_type=item_type,
-                            pos=random_drop_pos(pos)))
-            elif isinstance(entity, Mob):
-                if entity.id in self.mobs:
-                    del self.mobs[entity.id]
-                drops = [Dropped(
-                    item_id=str(generate_id()),
-                    item_type=random.choice(['strength_pot', 'heal_pot', 'speed_pot', 'useless_card']),
-                    pos=random_drop_pos(pos))
-                    for _ in range(random.randint(2, 3))]
-            for drop in drops:
-                self.dropped[drop.item_id] = drop
-            self.updates.append({'cmd': 'entity_died', 'id': entity.id, 'drops': drops})
-            logging.debug(f'entity died: {entity=}')
+            self.handle_death(entity)
 
     def get_collision_data(self, o1, o2):
         if not isinstance(o1, Entity) and not isinstance(o2, Entity):
@@ -407,8 +428,10 @@ class Server:
         id2 = o2.id if isinstance(o2, (Entity, Projectile)) else None
         result = {'id1': o1.id, 'id2': id2, 'aligned1': None, 'aligned2': None, 'damage1': 0, 'damage2': 0}
 
+        collision = dist(o1.get_pos(), o2.get_pos()) < 50
+
         if isinstance(o2, Projectile):
-            if o2.attacker_id != o1.id:
+            if o2.attacker_id != o1.id and collision:
                 result['damage1'] = o2.get_damage()
                 return result
             return {}
@@ -424,7 +447,7 @@ class Server:
         if tuple(aligned2) != tuple(pos_after2):
             result['aligned2'] = aligned2
 
-        if isinstance(o1, Entity) and isinstance(o2, Entity):
+        if isinstance(o1, Entity) and isinstance(o2, Entity) and collision:
             if o1.id in self.attacking_entities:
                 result['damage2'] = o1.get_damage()
             if o2.id in self.attacking_entities:
@@ -479,7 +502,7 @@ class Server:
             if collision_data:
                 collisions_data.append(collision_data)
                 self.handle_collision(collision_data)
-            self.attacking_entities = []
+        self.attacking_entities = []
         if collisions_data:
             self.updates.append({'cmd': 'collisions', 'collisions_data': collisions_data})
 
@@ -493,8 +516,7 @@ class Server:
             if not player.cooldowns['projectile'].is_over():
                 return
             proj = Projectile(**data['projectile'], start_pos=player.get_pos(t), t0=t, id=None)
-            player.cooldowns['projectile'].t0 = time.time_ns()
-            player.cooldowns['projectile'].duration = 10 ** 9
+            player.reset_cooldown('projectile')
             self.projectiles[proj.id] = proj
             data['projectile'] = proj  # add id field
         elif cmd == 'attack':
@@ -557,8 +579,7 @@ class Server:
 
                 item_id = str(generate_id())
                 player.items[item_id] = 'heal_pot'
-            player.cooldowns['skill'].t0 = time.time_ns()
-            player.cooldowns['skill'].duration = 10 * 10 ** 9
+            player.reset_cooldown('skill')
         self.updates.append(data)
 
     def receive_packets(self):
@@ -569,7 +590,7 @@ class Server:
                 logging.debug(f'received data: {data=}')
 
                 if data["cmd"] == "connect":
-                    if address not in self.client_public_keys:
+                    if address not in self.clients:
                         self.connect(data=data, address=address)
                 elif data["cmd"] == "disconnect":
                     self.disconnect(data=data, address=address)
@@ -582,11 +603,12 @@ class Server:
         if settings.ENABLE_SHADOWS:
             self.updates.append({
                 'cmd': 'shadows',
-                'entities': [{'id': entity.id, 'pos': entity.get_pos()} for entity in list(self.players.values()) + list(self.mobs.values())]
+                'entities': [{'id': entity.id, 'pos': entity.get_pos()} for entity in list(self.players.values()) +
+                             list(self.mobs.values())]
             })
-        data = json.dumps({'cmd': 'update', 'updates': self.updates}, cls=MyJSONEncoder).encode() + b'\n'
+        data = json_encode({'cmd': 'update', 'updates': self.updates})
         self.updates.clear()
-        for client in self.client_public_keys:
+        for client in self.clients:
             send_all(self.socket, data, client)
 
 

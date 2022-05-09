@@ -8,8 +8,10 @@ class NewClient(Client):
         super(NewClient, self).__init__(*args, **kwargs)
         self.lb_address = lb_address
 
-    def send_cmd(self, cmd: str, params: dict, dst):
-        self.send_data(json.dumps({'cmd': cmd, **params}).encode() + b'\n', dst)
+    def send_connect(self, username, password, action):
+        data = {'cmd': 'connect', 'username': username, 'password': password, 'action': action}
+        data = self.serialized_public_key + self.fernet.encrypt(json.dumps(data).encode())
+        self.sock.sendto(data, self.lb_address)
 
     def get_data(self, data):
         try:
@@ -37,7 +39,7 @@ class NewClient(Client):
         :param action: either 'login' or 'sign_up'
         :return: the error message on error and None on success
         """
-        self.send_cmd('connect', {'username': username, 'password': password, 'action': action}, self.lb_address)
+        self.send_connect(username=username, password=password, action=action)
         try:
             data, address = self.sock_wrapper.recv_from()
             if data['cmd'] == 'error':
