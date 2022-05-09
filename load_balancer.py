@@ -180,7 +180,7 @@ class LoadBalancer:
                 msg, address = self.socket.recvfrom(1024)
 
                 if address in self.servers:
-                    data = json.loads(self.lb_fernet.decrypt(msg))
+                    data = json.loads(self.lb_fernet.decrypt(msg, ttl=FERNET_TTL))
                     logging.debug(f'received data from server: {data=}, {address=}')
                     if data['cmd'] == 'forward_updates':
                         self.forward_updates(data, address)
@@ -194,7 +194,7 @@ class LoadBalancer:
                         loaded_key = serialization.load_pem_public_key(public_key)
                         fernet = get_fernet(loaded_key, self.lb_private_key)
 
-                        data = fernet.decrypt(data)
+                        data = fernet.decrypt(data, ttl=FERNET_TTL)
                         data = json.loads(data)
                         logging.debug(f'received data from client: {address=}, {data=}')
 
