@@ -30,16 +30,21 @@ class Button(pg.sprite.Sprite):
                     return
         self.clicked = False
 
-
-class TextInputBox(pg.sprite.Sprite):
+class TextBox(pg.sprite.Sprite):
     def __init__(self, groups, pos, size, font_size):
         self.groups = groups
         pg.sprite.Sprite.__init__(self, *groups)
         self.rect = pg.Rect(pos, size)
         self.font_size = font_size
-        self.active = False
         self.text = ""
 
+    def draw(self, screen):
+        """ DRAWS TEXT FROM TEXT BOX"""
+        font = pygame.font.SysFont('./graphics/fonts/comicsans.ttf', self.font_size)
+        img = font.render(self.text, True, BLACK)
+        screen.blit(img, self.rect)
+
+class TextInputBox(TextBox):
     def events(self, event_list):
         for event in event_list:
             if event.type == pg.MOUSEBUTTONDOWN:
@@ -55,13 +60,6 @@ class TextInputBox(pg.sprite.Sprite):
                     # CHECK USERNAME CHARACTER LIMIT
                     if len(self.text) <= username_lim:
                         self.text += event.unicode
-
-    def draw(self, screen):
-        """ DRAWS TEXT FROM TEXT BOX"""
-        font = pygame.font.SysFont('./graphics/fonts/comicsans.ttf', self.font_size)
-        img = font.render(self.text, True, BLACK)
-        screen.blit(img, self.rect)
-
 
 def login_events(textbox_dict: Dict[str, TextInputBox], button_dict: Dict[str, Button]) -> Optional[str]:
     """ CHECK EVENTS IN LOGIN SCREEN,
@@ -216,7 +214,7 @@ def draw(screen, all_sprites, map_obj, inv, chat, camera):
     pg.display.update()
 
 
-def login_state(screen, clock):
+def login_state(screen, clock, output):
     """ LOGIN STATE MAIN LOOP FUNCTION:
     RETURNS ACTION, USERNAME, PASSWORD
     ACTION IS EITHER 'login' OR 'sign_up'
@@ -225,7 +223,8 @@ def login_state(screen, clock):
     # SET UP TEXT BOXES:
     text_boxes = {
         'username_textbox': TextInputBox((), (555, 305), (420, 55), 45),
-        'password_textbox': TextInputBox((), (555, 475), (420, 55), 45)
+        'password_textbox': TextInputBox((), (555, 475), (420, 55), 45),
+        'output': output
     }
     buttons = {
         'sign_up_button': Button((), (825, 610), (133, 55)),
@@ -314,7 +313,9 @@ def run():
     running = True
     inv = Inventory((WIDTH, HEIGHT))
 
-    action, username, password = login_state(screen, clock)
+    output = TextBox((), (555, 250) (420, 55), 40)
+    
+    action, username, password = login_state(screen, clock, output)
 
     # SETTING UP CLIENT:
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -327,7 +328,8 @@ def run():
         message = sock_client.connect(username=username, password=password, action=action)
         while message is not None:
             logging.info(f'client connection failed: {message=}, {username=}, {password=}')
-            action, username, password = login_state(screen, clock)
+            output.text = "Username or password is incorrect"
+            action, username, password = login_state(screen, clock, output)
             message = sock_client.connect(username=username, password=password, action=action)
     else:
         sock_client = client.Client(sock=sock, server=(SERVER_IP, SERVER_PORT), sprite_groups=sprite_groups,
