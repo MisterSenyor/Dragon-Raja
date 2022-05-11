@@ -1,3 +1,5 @@
+import logging
+
 import pytmx
 
 SERVER_IP = '127.0.0.1'
@@ -40,11 +42,13 @@ MAP_SIZE = (tm.width * TILESIZE * MAP_COEFFICIENT, tm.height * TILESIZE * MAP_CO
 CHUNKS_X, CHUNKS_Y = MAP_SIZE[0] // CHUNK_SIZE, MAP_SIZE[1] // CHUNK_SIZE
 PEACEFUL_MODE = False
 
+LOGLEVEL = 100000000
+
 char_lim = 20  # chat text char lim
 
 username_lim = 20  # username character limit
 
-INVENTORY_SIZE = 15
+INVENTORY_SIZE = 10
 
 PLAYER_SIZE = [50, 30]
 MOB_SIZE = [50, 30]
@@ -57,3 +61,5 @@ COOLDOWN_DURATIONS = {
 }
 
 BACKUP_DELAY = 1
+
+FERNET_TTL = 2

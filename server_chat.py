@@ -32,10 +32,8 @@ class ChatServer:
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.bind(SERVER_ADDRESS_TCP)
         self.socket.listen()
-        print("Chat server is up and running")
         while True:
             client, address = self.socket.accept()
-            print(f'connection is established with {str(address)}')
             client.send("Connected successfully".encode())
             name = client.recv(HEADER_SIZE)
 
@@ -47,7 +45,6 @@ class ChatServer:
 
             self.clients.append(client)
             self.names.append(name)
-            print('The name of this client is {}'.format(name))
             client_thread = threading.Thread(target=self.handle_client, args=(client, seed,))
             client_thread.start()
 
@@ -64,7 +61,6 @@ class ChatServer:
                     seed += (client_port + ascii_seed(chat_start_seed))
                     seed %= 1000
                     data = decrypt_data(message, client_port, seed)
-                    print("{} sent {}".format(name, data))
                     self.broadcast("{}: {}".format(name, data))
                 else:
                     logging.error(f'Client sent empty string via chat: {name, client}')
@@ -72,7 +68,6 @@ class ChatServer:
                 logging.exception(f'exception while handling chat client: {name, client}')
                 self.clients.remove(client)
                 self.names.remove(name)
-                print(f"{name} has disconnected from server")
                 client.close()
                 break
 
@@ -81,7 +76,7 @@ class ChatServer:
             try:
                 client.send(message.encode())
             except Exception:
-                print("can't send message to {}".format(client.getsockname))
+                pass
 
 
 def main():

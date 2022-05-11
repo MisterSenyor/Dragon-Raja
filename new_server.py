@@ -34,13 +34,13 @@ class NewServer(Server):
             except ConnectionResetError:
                 pass
         if address == self.lb_address:
-            data = self.lb_fernet.decrypt(msg)
+            data = self.lb_fernet.decrypt(msg, ttl=FERNET_TTL)
             return json.loads(data), address
         player_id = int(msg[:6])
         if player_id in self.id_to_fernet_address:
             fernet = self.id_to_fernet_address[player_id][0]
             assert self.id_to_fernet_address[player_id][1] == address
-            data = fernet.decrypt(msg[6:])
+            data = fernet.decrypt(msg[6:], ttl=FERNET_TTL)
             json_data = json.loads(data)
             if not json_data['id'] == player_id:
                 raise Exception('client tried to connect with a different id!')
@@ -313,7 +313,7 @@ class NewServer(Server):
 
 
 def main():
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=LOGLEVEL)
 
     server_idx = int(sys.argv[1])
 

@@ -46,7 +46,7 @@ class JSONSocketWrapper:
             self.received[addr][1] += msg
             self.received[addr][0] += 1
             try:
-                data = self.fernet.decrypt(self.received[addr][1])
+                data = self.fernet.decrypt(self.received[addr][1], ttl=FERNET_TTL)
                 json_data = json.loads(data.decode())
                 # logging.debug(f'received data: {k=}, {len(data)=}, {data=}')
                 del self.received[addr]
